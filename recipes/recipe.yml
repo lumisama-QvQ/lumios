@@ -12,6 +12,13 @@ image-version: latest # You can pin to a specific version of Fedora as well
 # module configuration, executed in order
 # you can include multiple instances of the same module
 modules:
+  - type: akmods
+    nvidia-driver: nvidia-open
+    install:
+      - nvidia
+      - v4l2loopback #虚拟网络设备支持
+      - xone #Xbox支持
+  
   - type: files
     files:
       - source: system
@@ -19,27 +26,65 @@ modules:
 
   - type: dnf
     repos:
+      cleanup: true
       copr:
         - atim/starship
+        - monkeygold/nautilus-open-any-terminal
+        - scottames/ghostty
+        - ublue-os/packages
     install:
       packages:
+        - nautilus-open-any-terminal
         - micro
         - starship
-    remove:
+        - gnome-rounded-blur
+        - clash-meta
+        - ghostty
+    group-remove:
       packages:
-        # example: removing firefox (in favor of the flatpak)
-        # "firefox" is the main package, "firefox-langpacks" is a dependency
-        - firefox
-        - firefox-langpacks # also remove firefox dependency (not required for all packages, this is a special case)
+        - development-tools
+
+  - type: soar
+    auto-upgrade: true
+    upgrade-interval: 1d
 
   - type: default-flatpaks
     configurations:
-      - notify: true # Send notification after install/uninstall is finished (true/false)
+      - notify: false # Send notification after install/uninstall is finished (true/false)
         scope: system
+        install:
+          - io.missioncenter.MissionCenter
+          - com.github.tchx84.Flatseal
+          - be.alexandervanhee.gradia
+          - com.mattjakeman.ExtensionManager
+          - io.github.realmazharhussain.GdmSettings
+          - it.mijorus.gearlever
+          - page.codeberg.libre_menu_editor.LibreMenuEditor
         # If no repo information is specified, Flathub will be used by default
-        install: # system flatpaks we want all users to have and not remove
-          - org.mozilla.firefox
-          - org.gnome.Loupe
-      - scope: user # Also add Flathub user repo, but no user packages
 
+  - type: fonts
+    fonts:
+      nerd-fonts:
+        - hack
+        - FiraCode
+      url-fonts:
+        - name: Maple-Mono-NF-CN
+          url: https://github.com/subframe7536/maple-font/releases/download/v7.9/MapleMono-NF-CN-unhinted.zip
+        - name: lxgw-wenkai
+          url: https://github.com/lxgw/LxgwWenKai/releases/download/v1.530/lxgw-wenkai-v1.530.tar.gz
+
+  - type: gnome-extensions
+    install:
+      - Blur my Shell
+      - AppIndicator and KStatusNotifierItem Support
+      - Caffeine
+      - GNOME Fuzzy App Search
+      - User Themes
+      - Vitals
+      - Dash to Dock
+
+  - type: bling
+    install:
+      - 1password
+  
   - type: signing # this sets up the proper policy & signing files for signed images to work fully
