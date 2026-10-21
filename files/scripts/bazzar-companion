@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+EXT_UUID="bazaar-integration@kolunmi.github.io"
+REPO="AlexanderVanhee/bazaar-companion"
+EXT_REF="${BAZAAR_COMPANION_REF:-main}"
+# ------------------
+
+EXT_DIR="/usr/share/gnome-shell/extensions/${EXT_UUID}"
+SCHEMA_DIR="/usr/share/glib-2.0/schemas"
+TARBALL_URL="https://github.com/${REPO}/archive/${EXT_REF}.tar.gz"
+
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "${TMP_DIR}"' EXIT
+
+echo ">>> 下载 Bazaar Companion (${EXT_REF})"
+curl -fsSL "${TARBALL_URL}" -o "${TMP_DIR}/src.tar.gz"
+tar -xzf "${TMP_DIR}/src.tar.gz" -C "${TMP_DIR}"
+
+SRC_ROOT="$(find "${TMP_DIR}" -maxdepth 1 -type d -name 'bazaar-companion-*' | head -n1)"
+if [[ -z "${SRC_ROOT}" ]]; then
+    echo "ERROR: 找不到解压后的源码目录" >&2
+    exit 1
+fi
+
+echo ">>> 安装到 ${EXT_DIR}"
+install -d -m 0755 "${EXT_DIR}"
+
+cp -a "${SRC_ROOT}/src/." "${EXT_DIR}/"
+
+if [[ -d "${EXT_DIR}/schemas" ]] && compgen -G "${EXT_DIR}/schemas/*.gschema.xml" > /dev/null; then
+    echo ">>> 编译 GSettings schemas"
+    install -d -m 0755 "${SCHEMA_DIR}"
+    cp -a "${EXT_DIR}/schemas/"*.gschema.xml "${SCHEMA_DIR}/"
+    glib-compile-schemas "${SCHEMA_DIR}/"
+fi
+
+if [[ -d "${SRC_ROOT}/locale" && ! -d "${EXT_DIR}/locale" ]]; then
+    echo ">>> 复制 locale"
+    cp -a "${SRC_ROOT}/locale" "${EXT_DIR}/locale"
+fi
+
+chmod -R a+rX "${EXT_DIR}"
+
+echo ">>> Bazaar Companion 安装完成"

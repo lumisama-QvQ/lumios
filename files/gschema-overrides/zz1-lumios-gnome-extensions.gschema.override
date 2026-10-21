@@ -1,0 +1,24 @@
+# lumios 镜像的 GNOME 系统级默认值（GSettings schema override）
+#
+# 作用：把 enabled-extensions 的默认值改成下面这组，默认启用 recipe.yml 中
+#       gnome-extensions 模块安装的全部扩展，以及 bazzar-companion 提供的
+#       bazaar 集成扩展。
+#       系统级默认值对所有用户生效；用户自己改过之后以用户值为准。
+#
+# 文件位置与命名由 BlueBuild gschema-overrides 模块约定：
+#   files/gschema-overrides/ 下的 *.gschema.override 会被复制到
+#   /usr/share/glib-2.0/schemas/ 并执行 glib-compile-schemas。
+# zz1- 前缀是官方建议：字母序靠后的 override 优先级更高。
+#
+# UUID 与 recipe.yml 的 install 列表一一对应：
+#   Blur my Shell          -> blur-my-shell@aunetx
+#   AppIndicator ...       -> appindicatorsupport@rgcjonas.gmail.com
+#   Caffeine               -> caffeine@patapon.info
+#   GNOME Fuzzy App Search -> gnome-fuzzy-app-search@gnome-shell-extensions.Czarlie.gitlab.com
+#   User Themes            -> user-theme@gnome-shell-extensions.gcampax.github.com
+#   Vitals                 -> Vitals@CoreCoding.com
+#   Dash to Dock           -> dash-to-dock@micxgx.gmail.com
+#   bazzar-companion       -> bazaar-integration@kolunmi.github.io
+
+[org.gnome.shell]
+enabled-extensions=['blur-my-shell@aunetx', 'appindicatorsupport@rgcjonas.gmail.com', 'caffeine@patapon.info', 'gnome-fuzzy-app-search@gnome-shell-extensions.Czarlie.gitlab.com', 'user-theme@gnome-shell-extensions.gcampax.github.com', 'Vitals@CoreCoding.com', 'dash-to-dock@micxgx.gmail.com', 'bazaar-integration@kolunmi.github.io']

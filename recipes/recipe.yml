@@ -6,18 +6,16 @@ name: lumios
 description: This is my personal OS image.
 
 # the base image to build on top of (FROM) and the version tag to use
-base-image: ghcr.io/ublue-os/silverblue-main
+base-image: ghcr.io/blue-build/base-images/fedora-silverblue-nvidia-open
 image-version: latest # You can pin to a specific version of Fedora as well
 
 # module configuration, executed in order
 # you can include multiple instances of the same module
 modules:
   - type: akmods@latest
-    nvidia-driver: nvidia-open
     install:
-      - nvidia
-      #- v4l2loopback #虚拟网络设备支持
-      #- xone #Xbox支持
+      - v4l2loopback #虚拟网络设备支持
+      - xone #Xbox支持
   
   - type: files
     files:
@@ -27,22 +25,37 @@ modules:
   - type: dnf
     repos:
       cleanup: true
+      files:
+        - https://downloads.1password.com/linux/rpm/stable/$basearch
+      keys:
+        - https://downloads.1password.com/linux/keys/1password.asc
       copr:
-        - atim/starship
-        - monkeygold/nautilus-open-any-terminal
         - scottames/ghostty
         - ublue-os/packages
+        - ublue-os/staging
     install:
       packages:
-        - nautilus-open-any-terminal
-        - micro
-        - starship
         - gnome-rounded-blur
+        - nautilus-python
         - clash-meta
+        - micro
         - ghostty
+        - bazzar
+        - 1password
+        - 1password-cli
+        - topgrade
+        - gnome-tweaks
     group-remove:
       packages:
         - development-tools
+    remove:
+      packages:
+        - nvtop
+        - vim
+        - tmux
+        - gnome-software
+        - htop
+      auto-remove: true
 
   - type: soar
     auto-upgrade: true
@@ -83,8 +96,15 @@ modules:
       - Vitals
       - Dash to Dock
 
-  - type: bling
-    install:
-      - 1password
+  - type: gschema-overrides
+    include:
+      - zz1-lumios-gnome-extensions.gschema.override # 默认启用上面安装的全部扩展 + bazaar 集成
+
+  - type: script
+    scripts:
+      - bazzar-companion
+      - bibata-cursors.sh # Bibata-Modern-Ice 光标主题
+      - catppuccin-cursors.sh # Catppuccin mocha-mauve 光标主题
+      - papirus-icons.sh # Papirus 图标主题 + papirus-mixed 混合主题
   
   - type: signing # this sets up the proper policy & signing files for signed images to work fully
