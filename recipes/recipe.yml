@@ -20,10 +20,6 @@ modules:
   - type: dnf
     repos:
       cleanup: true
-      files:
-        - https://downloads.1password.com/linux/rpm/stable/$basearch
-      keys:
-        - https://downloads.1password.com/linux/keys/1password.asc
       copr:
         - scottames/ghostty
         - ublue-os/packages
@@ -40,6 +36,7 @@ modules:
         - 1password-cli
         - topgrade
         - gnome-tweaks
+        - https://downloads.1password.com/linux/rpm/stable/x86_64/1password-latest.rpm
     group-remove:
       packages:
         - development-tools
