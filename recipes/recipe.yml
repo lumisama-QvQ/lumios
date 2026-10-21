@@ -32,7 +32,7 @@ modules:
         - clash-meta
         - micro
         - ghostty
-        - bazzar
+        - bazaar
         - topgrade
         - gnome-tweaks
         - zen-browser
