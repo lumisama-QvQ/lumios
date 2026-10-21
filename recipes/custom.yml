@@ -1,16 +1,4 @@
----
-# yaml-language-server: $schema=https://schema.blue-build.org/recipe-v1.json
-# image will be published to ghcr.io/<user>/<name>
-name: lumios
-# description will be included in the image's metadata
-description: This is my personal OS image.
-
-# the base image to build on top of (FROM) and the version tag to use
-base-image: ghcr.io/blue-build/base-images/fedora-silverblue-nvidia-open
-image-version: latest # You can pin to a specific version of Fedora as well
-
-# module configuration, executed in order
-# you can include multiple instances of the same module
+# 个人化配置片段：由 recipes.yml 通过 `- from-file: custom.yml` 引入
 modules:
   - type: files
     files:
@@ -27,13 +15,20 @@ modules:
         - sneexy/zen-browser
     install:
       packages:
+        # 补丁+依赖
+        - libgda
+        - libgda-sqlite
+        - librime-lua
         - gnome-rounded-blur
         - nautilus-python
+        # 补充
         - clash-meta
         - micro
+        - topgrade
+        - ibus-rime
+        # GUI预装软件
         - ghostty
         - bazaar
-        - topgrade
         - gnome-tweaks
         - zen-browser
         - https://downloads.1password.com/linux/rpm/stable/x86_64/1password-latest.rpm
@@ -43,7 +38,6 @@ modules:
     remove:
       packages:
         - nvtop
-        - vim
         - tmux
         - gnome-software
         - htop
@@ -91,6 +85,7 @@ modules:
   - type: gschema-overrides
     include:
       - zz1-lumios-gnome-extensions.gschema.override # 默认启用上面安装的全部扩展 + bazaar 集成
+      - zz1-lumios-extension-settings.gschema.override # Dash to Dock / Blur my Shell 的默认配置
 
   - type: script
     scripts:
@@ -98,5 +93,3 @@ modules:
       - bibata-cursors.sh # Bibata-Modern-Ice 光标主题
       - catppuccin-cursors.sh # Catppuccin mocha-mauve 光标主题
       - papirus-icons.sh # Papirus 图标主题 + papirus-mixed 混合主题
-  
-  - type: signing # this sets up the proper policy & signing files for signed images to work fully

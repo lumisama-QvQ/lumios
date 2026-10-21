@@ -1,0 +1,21 @@
+---
+# yaml-language-server: $schema=https://schema.blue-build.org/recipe-v1.json
+name: lumios
+description: 个人自用的 Fedora Silverblue (NVIDIA) 镜像，内置 Legion 补丁内核与桌面配置。
+base-image: quay.io/fedora-ostree-desktops/silverblue
+image-version: 44
+platforms:
+- linux/amd64 # 补丁内核只有 x86_64 构建
+modules:
+- type: script
+  # ⚠ Legion 固件 + 补丁内核（构建期最先执行）：会删除 stock 内核，镜像只能有一个内核目录
+  scripts:
+    - legion-fix.sh
+- from-file: base/common.yml
+- from-file: base/silverblue.yml
+- from-file: base/nvidia.yml # installnvidia.sh 在补丁内核上编译并签名 NVIDIA kmod
+- from-file: custom.yml
+- type: os-release
+  properties:
+    PRETTY_NAME: lumios (FROM Fedora Silverblue)
+- from-file: base/post-build.yml

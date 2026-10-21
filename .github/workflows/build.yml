@@ -26,17 +26,36 @@ jobs:
       fail-fast: false # stop GH from cancelling all matrix builds if one fails
       matrix:
         recipe:
-          # !! Add your recipes here
-          - recipe.yml
+          - recipes.yml
     steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # 把内核/模块签名私钥写入仓库根目录的 MOK.priv（nvidia.yml / post-build.yml 挂载使用）
+      # 仓库 secret：KERNEL_SIGNING_SECRET = base64 -w0 MOK.priv
+      # 未配置时写入空文件：签名脚本会跳过签名，镜像可构建但启动需关闭 Secure Boot
+      - name: Extract kernel signing key
+        shell: bash
+        env:
+          KERNEL_SIGNING_SECRET: ${{ secrets.KERNEL_SIGNING_SECRET }}
+        run: |
+          if [[ -n "${KERNEL_SIGNING_SECRET}" ]]; then
+            printf '%s' "${KERNEL_SIGNING_SECRET}" | base64 -d > MOK.priv
+            echo "kernel signing enabled"
+          else
+            : > MOK.priv
+            echo "WARNING: KERNEL_SIGNING_SECRET is not set; kernel/modules will be unsigned (Secure Boot must be disabled)"
+          fi
+
       # the build is fully handled by the reusable github action
       - name: Build Custom Image
-        uses: blue-build/github-action@v1.13
+        uses: blue-build/github-action@main
         with:
           recipe: ${{ matrix.recipe }}
           cosign_private_key: ${{ secrets.SIGNING_SECRET }}
           registry_token: ${{ github.token }}
           pr_event_number: ${{ github.event.number }}
+          skip_checkout: true
 
           # enabled by default, disable if your image is small and you want faster builds
           maximize_build_space: true

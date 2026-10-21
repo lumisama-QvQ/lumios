@@ -1,0 +1,178 @@
+---
+# yaml-language-server: $schema=https://schema.blue-build.org/module-list-v1.json
+modules:
+  - type: signing
+  - type: justfiles
+    validate: true
+    install: true
+    include:
+      - 30-secureboot.just
+  - type: files
+    files:
+      - source: system
+        destination: /
+  - type: systemd
+    system:
+      masked:
+        - rpm-ostreed-automatic.timer
+      enabled:
+        - bootc-fetch-apply-updates.timer
+        - flatpak-system-updates.timer
+    user:
+      enabled:
+        - flatpak-user-updates.timer
+
+  # Install stuff from negativo
+  - type: dnf
+    repos:
+      nonfree: negativo17
+    replace:
+      - from-repo: fedora-multimedia
+        skip-unavailable: true
+        packages:
+          - libva
+          - mesa-dri-drivers
+          - mesa-filesystem
+          - mesa-libEGL
+          - mesa-libGL
+          - mesa-libgbm
+          - mesa-va-drivers
+          - mesa-vulkan-drivers
+          - libheif
+
+  # x86_64 packages only, hence why skip-unavailable is set
+  - type: dnf
+    install:
+      packages:
+        - repo: fedora-multimedia
+          skip-unavailable: true
+          packages:
+            - intel-vaapi-driver
+    replace:
+      - from-repo: fedora-multimedia
+        skip-unavailable: true
+        packages:
+          - libva-intel-media-driver
+          - intel-gmmlib
+          - intel-mediasdk
+          
+  - type: dnf
+    install:
+      packages:
+        - libopenjph # Manually install dependency for `libheif`, as Negativo upstreamed it
+        - repo: fedora-multimedia
+          packages:
+            - libva-utils
+            - pipewire-libs-extra
+            - heif-pixbuf-loader
+    replace:
+      - from-repo: fedora-multimedia
+        packages:
+          - old: ffmpeg-free
+            new: ffmpeg
+          - old: libfdk-aac-free
+            new: libfdk-aac
+          - old: libavcodec-free
+            new: libavcodec
+
+  - type: dnf
+    install:
+      packages:
+        - repo: fedora-multimedia
+          packages:
+            - ffmpeg-libs
+
+  # Install ublue and QOL stuff
+  - type: dnf
+    repos:
+      cleanup: true
+      copr:
+        - ublue-os/packages
+        - ublue-os/staging
+    install:
+      skip-unavailable: true
+      packages:
+        - bootc
+        - ublue-os-udev-rules
+        - fedora-repos-archive
+        - zstd
+        - sbsign
+        - alsa-firmware
+        - apr
+        - apr-util
+        - distrobox
+        - ffmpegthumbnailer
+        - flatpak-spawn
+        - fuse
+        - fzf
+        - grub2-tools-extra
+        - google-noto-sans-balinese-fonts
+        - google-noto-sans-cjk-fonts
+        - google-noto-sans-javanese-fonts
+        - google-noto-sans-sundanese-fonts
+        - just
+        - libcamera
+        - libcamera-tools
+        - libcamera-gstreamer
+        - libcamera-ipa
+        - libimobiledevice-utils
+        - libratbag-ratbagd
+        - lshw
+        - net-tools
+        - nvme-cli
+        - openrgb-udev-rules
+        - openssl
+        - oversteer-udev
+        - pam-u2f
+        - pam_yubico
+        - pamu2fcfg
+        - pipewire-plugin-libcamera
+        - powerstat
+        - smartmontools
+        - solaar-udev
+        - squashfs-tools
+        - symlinks
+        - tcpdump
+        - traceroute
+        - usbmuxd
+        - vim
+        - wireguard-tools
+        - wl-clipboard
+        - xhost
+        - xorg-x11-xauth
+        - yubikey-manager
+        - openssh-askpass
+        - gvfs-fuse
+        - gvfs-smb
+        - gvfs-nfs
+        - gvfs-mtp
+      exclude:
+        - google-noto-sans-cjk-vf-fonts
+        - default-fonts-cjk-sans
+    remove:
+      auto-remove: false
+      packages:
+        - fedora-flathub-remote
+        - fedora-third-party
+        - fedora-workstation-repositories
+    replace:
+      # mitigate upstream packaging bug: https://bugzilla.redhat.com/show_bug.cgi?id=2332429
+      # swap the incorrectly installed OpenCL-ICD-Loader for ocl-icd, the expected package
+      - from-repo: fedora
+        install-weak-deps: false
+        packages:
+          - new: ocl-icd
+            old: OpenCL-ICD-Loader
+
+  - type: script
+    env:
+      CSFG: /usr/lib/systemd/system-generators/coreos-sulogin-force-generator
+    snippets:
+      # use CoreOS' generator for emergency/rescue boot
+      # see detail: https://github.com/ublue-os/main/issues/653
+      - curl -sSLo ${CSFG} https://raw.githubusercontent.com/coreos/fedora-coreos-config/refs/heads/stable/overlay.d/05core/usr/lib/systemd/system-generators/coreos-sulogin-force-generator
+      - chmod +x ${CSFG}
+      # Cleanup Negativo repo 
+      - rm -f /etc/yum.repos.d/fedora-negativo17.repo
+    scripts:
+      - install-appimage-thumbnailer.sh

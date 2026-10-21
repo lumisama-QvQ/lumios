@@ -1,0 +1,66 @@
+# Dash to Dock / Blur my Shell 的系统级默认设置
+#
+# 依据用户当前机器（2026-10-21 读取）的 dconf 实际配置生成，尽量保持一致：
+#   Dash to Dock : dconf dump /org/gnome/shell/extensions/dash-to-dock/
+#   Blur my Shell: dconf dump /org/gnome/shell/extensions/blur-my-shell/
+# dconf 只记录「显式设置过」的键，未列出的键沿用扩展 schema 的默认值，
+# 因此这里也只复现显式设置过的键。
+#
+# 注意：
+#   - Blur my Shell 的 [popup] 段是旧版本残留（当前版本已无该 schema），已排除。
+#   - rounded-blur-found 是运行时探测状态而不是用户配置，已排除。
+#   - Dash to Dock 的 preferred-monitor-by-connector 沿用当前机器的 'eDP-1'。
+
+[org.gnome.shell.extensions.dash-to-dock]
+background-opacity=0.8
+custom-background-color=false
+custom-theme-shrink=false
+dash-max-icon-size=48
+disable-overview-on-startup=true
+dock-position='BOTTOM'
+height-fraction=0.9
+icon-size-fixed=false
+intellihide-mode='FOCUS_APPLICATION_WINDOWS'
+multi-monitor=false
+preferred-monitor=-2
+preferred-monitor-by-connector='eDP-1'
+preview-size-scale=0.2
+running-indicator-style='DOT'
+scroll-action='cycle-windows'
+transparency-mode='DEFAULT'
+
+[org.gnome.shell.extensions.blur-my-shell]
+settings-version=7
+pipelines={'pipeline_default': {'name': <'Default'>, 'effects': <[<{'type': <'dual_kawase_blur'>, 'id': <'effect_000000000000'>, 'params': <{'unscaled_radius': <30>, 'brightness': <0.6>}>}>]>}, 'pipeline_migrated_dynamic_blur': {'name': <'Migrated dynamic blur'>, 'effects': <[<{'type': <'dual_kawase_blur'>, 'id': <'effect_migrated_dynamic_blur'>, 'params': <{'unscaled_radius': <60>, 'brightness': <0.6>}>}>]>}}
+
+[org.gnome.shell.extensions.blur-my-shell.applications]
+pipeline='pipeline_default'
+
+[org.gnome.shell.extensions.blur-my-shell.coverflow-alt-tab]
+blur=false
+pipeline='pipeline_default'
+
+[org.gnome.shell.extensions.blur-my-shell.dash-to-dock]
+blur=true
+corner-radius=25
+pipeline='pipeline_migrated_dynamic_blur'
+static-blur=false
+style-dash-to-dock=0
+unblur-in-overview=false
+
+[org.gnome.shell.extensions.blur-my-shell.lockscreen]
+pipeline='pipeline_default'
+
+[org.gnome.shell.extensions.blur-my-shell.overview]
+pipeline='pipeline_default'
+
+[org.gnome.shell.extensions.blur-my-shell.panel]
+corner-radius=0
+override-background-dynamically=true
+pipeline='pipeline_default'
+
+[org.gnome.shell.extensions.blur-my-shell.screenshot]
+pipeline='pipeline_default'
+
+[org.gnome.shell.extensions.blur-my-shell.window-list]
+pipeline='pipeline_migrated_dynamic_blur'
