@@ -29,7 +29,7 @@ jobs:
           - recipes.yml
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       # 把内核/模块签名私钥写入仓库根目录的 MOK.priv（nvidia.yml / post-build.yml 挂载使用）
       # 仓库 secret：KERNEL_SIGNING_SECRET = base64 -w0 MOK.priv
