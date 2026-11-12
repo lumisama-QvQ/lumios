@@ -9,8 +9,6 @@ modules:
       packages:
         - adw-gtk3-theme
         - gvfs-nfs
-        - ibus-unikey
-        - ibus-mozc
     remove:
       auto-remove: false
       packages:

@@ -9,7 +9,7 @@ modules:
     repos:
       cleanup: true
       copr:
-        - scottames/ghostty
+        # - scottames/ghostty
         - ublue-os/packages
         - ublue-os/staging
         - sneexy/zen-browser
@@ -19,12 +19,10 @@ modules:
         - libgda
         - libgda-sqlite
         - librime-lua
-        - gnome-rounded-blur
         - nautilus-python
         # 补充
         - clash-meta
         - micro
-        - topgrade
         - ibus-rime
         # GUI预装软件
         - ghostty
@@ -46,21 +44,7 @@ modules:
   - type: soar
     auto-upgrade: true
     upgrade-interval: 1d
-
-  - type: default-flatpaks
-    configurations:
-      - notify: false # Send notification after install/uninstall is finished (true/false)
-        scope: system
-        install:
-          - io.missioncenter.MissionCenter
-          - com.github.tchx84.Flatseal
-          - be.alexandervanhee.gradia
-          - com.mattjakeman.ExtensionManager
-          - io.github.realmazharhussain.GdmSettings
-          - it.mijorus.gearlever
-          - page.codeberg.libre_menu_editor.LibreMenuEditor
-        # If no repo information is specified, Flathub will be used by default
-
+    
   - type: fonts
     fonts:
       nerd-fonts:
@@ -81,11 +65,6 @@ modules:
       - User Themes
       - Vitals
       - Dash to Dock
-
-  - type: gschema-overrides
-    include:
-      - zz1-lumios-gnome-extensions.gschema.override # 默认启用上面安装的全部扩展 + bazaar 集成
-      - zz1-lumios-extension-settings.gschema.override # Dash to Dock / Blur my Shell 的默认配置
 
   - type: script
     scripts:
