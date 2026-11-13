@@ -65,10 +65,12 @@ modules:
       - scope: system
         install:
           - io.github.kolunmi.Bazaar
+  - type: bling
+    install:
+    - 1password
         
   - type: script
     scripts:
       - bazzar-companion
       - bibata-cursors.sh # Bibata-Modern-Ice 光标主题
-      - catppuccin-cursors.sh # Catppuccin mocha-mauve 光标主题
       - papirus-icons.sh # Papirus 图标主题 + papirus-mixed 混合主题
