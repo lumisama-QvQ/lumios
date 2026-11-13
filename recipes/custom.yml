@@ -21,6 +21,7 @@ modules:
         # 补充
         - micro
         - fish
+        - smem
         - ibus-rime
         # GUI预装软件
         - gnome-tweaks
