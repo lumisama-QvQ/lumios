@@ -7,7 +7,6 @@ image-version: 45
 platforms:
 - linux/amd64
 modules:
-- from-file: custom.yml
 - type: dnf
   # base image 自带这两个 ibus 输入法；旧镜像没有，移除以保持行为一致
   remove:
@@ -19,4 +18,5 @@ modules:
   # 重建 mutter 并反向应用 upstream d5e397c2（恢复不透明区域 blending），覆盖官方包
   scripts:
     - override-mutter.sh
+- from-file: custom.yml
 - type: signing
