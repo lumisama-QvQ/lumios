@@ -25,7 +25,7 @@ modules:
         # GUI预装软件
         - gnome-tweaks
         - clash-verge-rev
-        - https://downloads.1password.com/linux/rpm/stable/x86_64/1password-latest.rpm
+        # 1Password 由后面的 1password.sh 安装（需要同时修正辅助二进制的属组/GID）
     group-remove:
       packages:
         - development-tools
@@ -65,12 +65,10 @@ modules:
       - scope: system
         install:
           - io.github.kolunmi.Bazaar
-  - type: bling
-    install:
-    - 1password
-        
+
   - type: script
     scripts:
+      - 1password.sh # 安装 1Password 并修正 BrowserSupport/op/mcp 的属组与 setgid
       - bazzar-companion
       - bibata-cursors.sh # Bibata-Modern-Ice 光标主题
       - papirus-icons.sh # Papirus 图标主题 + papirus-mixed 混合主题
