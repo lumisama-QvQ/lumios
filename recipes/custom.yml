@@ -25,10 +25,10 @@ modules:
         # GUI预装软件
         - gnome-tweaks
         - clash-verge-rev
-        # 1Password 由后面的 1password.sh 安装（需要同时修正辅助二进制的属组/GID）
     group-remove:
       packages:
         - development-tools
+        - gnome-shell-extension-*
     remove:
       packages:
         - nvtop
@@ -39,7 +39,7 @@ modules:
   - type: brew
     auto-upgrade: true
     brew-analytics: true
-    
+
   - type: fonts
     fonts:
       nerd-fonts:
@@ -60,11 +60,18 @@ modules:
       - User Themes
       - Vitals
       - Dash to Dock
+      - Legacy (GTK3) Theme Scheme Auto Switcher
   - type: default-flatpaks
     configurations:
       - scope: system
+        notify: false
         install:
           - io.github.kolunmi.Bazaar
+          - it.mijorus.gearlever
+          - org.gnome.Calendar
+          - org.gnome.FileRoller
+          - org.gnome.TextEditor
+          - org.gnome.NautilusPreviewer
 
   - type: script
     scripts:
