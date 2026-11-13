@@ -17,6 +17,7 @@ modules:
         - libgda
         - libgda-sqlite
         - librime-lua
+        - firefox-langpacks
         # 补充
         - micro
         - ibus-rime
