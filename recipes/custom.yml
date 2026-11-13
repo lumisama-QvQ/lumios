@@ -9,10 +9,8 @@ modules:
     repos:
       cleanup: true
       copr:
-        # - scottames/ghostty
-        - ublue-os/packages
-        - ublue-os/staging
-        - sneexy/zen-browser
+        - scottames/ghostty
+        - oak443/clash-verge-rev
     install:
       packages:
         # 补丁+依赖
@@ -21,14 +19,12 @@ modules:
         - librime-lua
         - nautilus-python
         # 补充
-        - clash-meta
         - micro
         - ibus-rime
         # GUI预装软件
-        - ghostty
         - bazaar
         - gnome-tweaks
-        - zen-browser
+        - clash-verge-rev
         - https://downloads.1password.com/linux/rpm/stable/x86_64/1password-latest.rpm
     group-remove:
       packages:
@@ -36,14 +32,13 @@ modules:
     remove:
       packages:
         - nvtop
-        - tmux
         - gnome-software
         - htop
       auto-remove: true
 
-  - type: soar
+  - type: brew
     auto-upgrade: true
-    upgrade-interval: 1d
+    brew-analytics: true
     
   - type: fonts
     fonts:
