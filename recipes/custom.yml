@@ -20,6 +20,7 @@ modules:
         - firefox-langpacks
         # 补充
         - micro
+        - fish
         - ibus-rime
         # GUI预装软件
         - gnome-tweaks
