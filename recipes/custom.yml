@@ -17,12 +17,10 @@ modules:
         - libgda
         - libgda-sqlite
         - librime-lua
-        - nautilus-python
         # 补充
         - micro
         - ibus-rime
         # GUI预装软件
-        - bazaar
         - gnome-tweaks
         - clash-verge-rev
         - https://downloads.1password.com/linux/rpm/stable/x86_64/1password-latest.rpm
@@ -60,7 +58,12 @@ modules:
       - User Themes
       - Vitals
       - Dash to Dock
-
+  - type: default-flatpaks
+    configurations:
+      - scope: system
+        install:
+          - io.github.kolunmi.Bazaar
+        
   - type: script
     scripts:
       - bazzar-companion
