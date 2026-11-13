@@ -1,0 +1,55 @@
+From d5e397c2d4f5c35b648fc52edfac2228127e89fd Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Pavel=20Ondra=C4=8Dka?= <pavel.ondracka@gmail.com>
+Date: Thu, 27 Aug 2026 15:25:48 +0200
+Subject: [PATCH] shaped-texture: Disable blending for opaque regions
+
+The opaque-region path is intended to avoid framebuffer blending, but
+commit e5542c3210 removed the explicit no-blend state while changing the
+layer combine function to REPLACE. The combine function controls how a
+fragment is produced but it does not disable blending. So RGBA window
+textures still take the blended path even for client-declared opaque
+regions.
+
+Restore the explicit fixed-function blend state while retaining the
+simpler REPLACE combine shader.
+
+Performance was measured with RV370/r300 driver at 1920x1080. Five
+maximized Wayland windows were created with gnome-shell-perf-helper.
+After a warm-up cycle, the overview was shown and hidden repeatedly and
+frame presentations were measured (with background rendering disabled to
+remove r300-specific unrelated bottleneck). Mean effective presentation
+rate over the measured interval improved from 32.2 to 35.8 FPS (+11.1%)
+while missed vblanks fell from 72.0 to 60.75 (-15.6%). With llvmpipe and
+normal background rendering, delivery was within one frame but Shell
+all-thread CPU time was reduced by 8%.
+
+Fixes: e5542c3210 ("shaped-texture: Use the REPLACE combine function on opaque areas")
+Closes: https://gitlab.gnome.org/GNOME/mutter/-/work_items/4995
+Part-of: <https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5274>
+---
+ src/compositor/meta-shaped-texture.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/compositor/meta-shaped-texture.c b/src/compositor/meta-shaped-texture.c
+index e17fc086ae9..f9153d79629 100644
+--- a/src/compositor/meta-shaped-texture.c
++++ b/src/compositor/meta-shaped-texture.c
+@@ -546,6 +546,7 @@ get_unblended_pipeline (MetaShapedTexture   *stex,
+       cogl_pipeline_set_layer_combine (pipeline, 0,
+                                        "RGBA = REPLACE (TEXTURE)",
+                                        NULL);
++      cogl_pipeline_set_blend (pipeline, "RGBA = ADD (SRC_COLOR, 0)", NULL);
+       attach_color_transform (color_state, target_color_state,
+                               pipeline, CLUTTER_COLOR_STATE_TRANSFORM_OPAQUE);
+       return pipeline;
+@@ -556,6 +557,7 @@ get_unblended_pipeline (MetaShapedTexture   *stex,
+       cogl_pipeline_set_layer_combine (pipeline, 0,
+                                        "RGBA = REPLACE (TEXTURE)",
+                                        NULL);
++      cogl_pipeline_set_blend (pipeline, "RGBA = ADD (SRC_COLOR, 0)", NULL);
+       attach_color_transform (color_state, target_color_state, pipeline, 0);
+       return pipeline;
+     }
+-- 
+GitLab
+
