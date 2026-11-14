@@ -18,7 +18,6 @@ modules:
     group-remove:
       packages:
         - development-tools
-        - gnome-shell-extension-*
     remove:
       packages:
         - nvtop
@@ -71,12 +70,12 @@ modules:
         - name: lxgw-wenkai
           url: https://github.com/lxgw/LxgwWenKai/releases/download/v1.530/lxgw-wenkai-v1.530.tar.gz
 
-  # L6 固定版本资源：pin 了 tag
+  # L6 固定版本资源
   - type: script
     scripts:
       - bibata-cursors.sh
 
-  # L7 低增量：flatpak 只写配置，brew 的升级在运行时
+  # L7 低增量
   - type: default-flatpaks
     configurations:
       - scope: system
@@ -92,7 +91,7 @@ modules:
     auto-upgrade: true
     brew-analytics: true
 
-  # L8 桌面软件：COPR，跟随上游
+  # L8 桌面软件
   - type: dnf
     repos:
       cleanup: true
@@ -105,7 +104,7 @@ modules:
         - morewaita-icon-theme
         - clash-verge-rev
 
-  # L9 在线最新：每次构建都可能变
+  # L9 在线最新
   - type: gnome-extensions
     install:
       - Blur my Shell

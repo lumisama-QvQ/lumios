@@ -2,12 +2,6 @@
 # btrfs 透明压缩修复：rootflags、fstab 根条目、当次重挂载；每次开机幂等执行。
 set -euo pipefail
 
-fstype=$(findmnt -n -o FSTYPE /sysroot 2>/dev/null || findmnt -n -o FSTYPE /)
-if [[ "$fstype" != btrfs ]]; then
-  echo "root filesystem is ${fstype}, not btrfs; skipping"
-  exit 0
-fi
-
 # bootc switch 会重置 BLS 参数，所以每次开机检查
 if ! grep -q 'rootflags=[^ ]*compress=zstd' /proc/cmdline; then
   if rpm-ostree kargs \

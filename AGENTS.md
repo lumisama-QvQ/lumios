@@ -6,6 +6,7 @@
 - [分层与权重](AGENTS/layers.md)
 - [构建环境](AGENTS/build-env.md)
 - [1Password](AGENTS/1password.md)
+- [Clash Verge](AGENTS/clash-verge.md)
 - [mutter 补丁](AGENTS/mutter.md)
 - [GNOME 扩展](AGENTS/gnome-extensions.md)
 - [光标 / 图标主题](AGENTS/themes.md)

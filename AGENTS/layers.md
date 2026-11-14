@@ -4,7 +4,7 @@ BlueBuild 把每个 module 编译成一条 `RUN`，即 **一个 module = 一层*
 
 | 层 | 内容 | 更新频率 | 依赖变化 | 增量 |
 | --- | --- | --- | --- | --- |
-| L1 基线 | 移除包、signing、`files/system` | 极低 | 无 | 小 |
+| L1 基线 | 移除包、signing、`files/system`、systemd 单元启用 | 极低 | 无 | 小 |
 | L2 核心补丁 | `override-mutter.sh` 重建 mutter | 低（跟随 Fedora） | 小 | 中 |
 | L3 系统软件 | libgda、librime-lua、ibus-rime、firefox-langpacks | 中 | 中 | 中 |
 | L4 CLI | micro、fish、smem | 低 | 少 | 小 |
