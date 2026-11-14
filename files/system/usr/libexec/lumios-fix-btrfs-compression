@@ -20,5 +20,8 @@ if grep -qE '^[^#].*[[:space:]]/[[:space:]]+btrfs[[:space:]]' /etc/fstab; then
   echo "commented out root btrfs entry in /etc/fstab"
 fi
 
+mount -o remount,compress=zstd:1 /sysroot 2>/dev/null \
+  || echo "warning: remount /sysroot failed" >&2
+
 mount -o remount,compress=zstd:1 /var 2>/dev/null \
   || echo "warning: remount /var failed" >&2
