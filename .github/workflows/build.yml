@@ -27,7 +27,7 @@ jobs:
           - recipes.yml
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       # base64 的 MOK.priv；未配置则跳过签名
       - name: Extract kernel signing key
