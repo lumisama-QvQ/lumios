@@ -57,6 +57,7 @@ modules:
         - micro
         - fish
         - smem
+        - ps_mem
 
   # L5 字体：固定 URL，体积大
   - type: fonts
