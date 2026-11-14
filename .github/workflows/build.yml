@@ -2,16 +2,14 @@ name: bluebuild
 on:
   schedule:
     - cron:
-        "00 06 * * *" # build at 06:00 UTC every day
-        # (20 minutes after last ublue images start building)
+        "00 06 * * *"
   push:
-    paths-ignore: # don't rebuild if only documentation has changed
+    paths-ignore:
       - "**.md"
 
   pull_request:
-  workflow_dispatch: # allow manually triggering builds
+  workflow_dispatch:
 concurrency:
-  # only run one build at a time
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
   cancel-in-progress: true
 jobs:
@@ -23,7 +21,7 @@ jobs:
       packages: write
       id-token: write
     strategy:
-      fail-fast: false # stop GH from cancelling all matrix builds if one fails
+      fail-fast: false
       matrix:
         recipe:
           - recipes.yml
@@ -31,9 +29,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # 把内核/模块签名私钥写入仓库根目录的 MOK.priv（nvidia.yml / post-build.yml 挂载使用）
-      # 仓库 secret：KERNEL_SIGNING_SECRET = base64 -w0 MOK.priv
-      # 未配置时写入空文件：签名脚本会跳过签名，镜像可构建但启动需关闭 Secure Boot
+      # base64 的 MOK.priv；未配置则跳过签名
       - name: Extract kernel signing key
         shell: bash
         env:
@@ -47,7 +43,6 @@ jobs:
             echo "WARNING: KERNEL_SIGNING_SECRET is not set; kernel/modules will be unsigned (Secure Boot must be disabled)"
           fi
 
-      # the build is fully handled by the reusable github action
       - name: Build Custom Image
         uses: blue-build/github-action@main
         with:
@@ -57,5 +52,4 @@ jobs:
           pr_event_number: ${{ github.event.number }}
           skip_checkout: true
 
-          # enabled by default, disable if your image is small and you want faster builds
           maximize_build_space: true

@@ -1,9 +1,8 @@
-# 个人化配置片段：由 recipes.yml 通过 `- from-file: custom.yml` 引入
 modules:
   - type: files
     files:
       - source: system
-        destination: / # copies files/system/* (* means everything inside it) into your image's root folder /
+        destination: / # files/system/* → /
 
   - type: dnf
     repos:
@@ -14,18 +13,15 @@ modules:
         - rivenirvana/morewaita-icon-theme
     install:
       packages:
-        # 补丁+依赖
         - libgda
         - libgda-sqlite
         - librime-lua
         - firefox-langpacks
-        # 补充
         - micro
         - morewaita-icon-theme
         - fish
         - smem
         - ibus-rime
-        # GUI预装软件
         - gnome-tweaks
         - clash-verge-rev
     group-remove:
@@ -78,8 +74,8 @@ modules:
 
   - type: script
     scripts:
-      - 1password.sh # 安装 1Password 并修正 BrowserSupport/op/mcp 的属组与 setgid
-      - gradia-capture.sh # 从 GitHub 源码安装 Gradia Capture 截图标注扩展
+      - 1password.sh # 属组/GID 修正
+      - gradia-capture.sh
       - bazzar-companion
-      - bibata-cursors.sh # Bibata-Modern-Ice 光标主题
-      - papirus-icons.sh # Papirus 图标主题 + papirus-mixed 混合主题
+      - bibata-cursors.sh
+      - papirus-icons.sh

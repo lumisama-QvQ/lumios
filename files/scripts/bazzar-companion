@@ -4,8 +4,6 @@ set -euo pipefail
 EXT_UUID="bazaar-integration@kolunmi.github.io"
 REPO="AlexanderVanhee/bazaar-companion"
 EXT_REF="${BAZAAR_COMPANION_REF:-main}"
-# ------------------
-
 EXT_DIR="/usr/share/gnome-shell/extensions/${EXT_UUID}"
 SCHEMA_DIR="/usr/share/glib-2.0/schemas"
 TARBALL_URL="https://github.com/${REPO}/archive/${EXT_REF}.tar.gz"

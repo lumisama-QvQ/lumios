@@ -1,24 +1,9 @@
 #!/usr/bin/env bash
-#
-# 从 Papirus 官方仓库拉取图标主题（默认自动解析最新 tag），安装到系统主题目录，
-# 并生成 papirus-mixed 混合主题：只软链 apps / mimetypes / places 三类图标，
-# index.theme 以 Papirus 的为底，Name/Inherits 换成 Papirus Mixed / Adwaita,hicolor。
-#
-# 可用环境变量：
-#   PAPIRUS_VERSION     上游 tag，默认 latest：构建时自动从 GitHub tags.atom 解析最新 tag；
-#                       想锁定版本就写具体 tag（如 20260801），tag 列表见
-#                       https://github.com/PapirusDevelopmentTeam/papirus-icon-theme/tags
-#   PAPIRUS_VARIANTS    安装哪些变体，默认 "Papirus Papirus-Dark Papirus-Light"
-#                       （Dark/Light 里有大量软链指向 ../Papirus，所以至少要装 Papirus）
-#   PAPIRUS_ICONS_DIR   安装根目录，默认 /usr/share/icons
-#   MIXED_THEME_NAME    混合主题目录名，默认 papirus-mixed
-#   MIXED_CATEGORIES    混合主题保留的类别，默认 "apps mimetypes places"
-#   MIXED_THEME_TITLE   混合主题显示名，默认 "Papirus Mixed"
-#   MIXED_THEME_INHERITS 混合主题回退主题，默认 "Adwaita,hicolor"
+# 安装 Papirus 图标主题，并生成 papirus-mixed 混合主题（环境变量见 AGENTS.md）。
 set -euo pipefail
 
 PAPIRUS_VERSION="${PAPIRUS_VERSION:-latest}"
-# 解析 latest 失败时的兜底版本（避免网络波动/上游改版导致构建直接失败）
+# 网络失败时的兜底版本
 PAPIRUS_FALLBACK_VERSION="20260801"
 PAPIRUS_VARIANTS="${PAPIRUS_VARIANTS:-Papirus Papirus-Dark Papirus-Light}"
 PAPIRUS_ICONS_DIR="${PAPIRUS_ICONS_DIR:-/usr/share/icons}"
@@ -37,7 +22,6 @@ resolve_latest_version() {
     local tag=""
     if curl -fsSL --retry 2 --retry-delay 2 -o "${atom_file}" \
         https://github.com/PapirusDevelopmentTeam/papirus-icon-theme/tags.atom; then
-        # atom 的 entry 按时间倒序，第一个 /releases/tag/<tag> 就是最新 tag
         tag="$(grep -m1 -oE '/releases/tag/[^"]+' "${atom_file}" | sed 's|.*/||' || true)"
     fi
     if [ -z "${tag}" ]; then
@@ -60,7 +44,6 @@ mkdir -p "${WORK_DIR}/src"
 tar -xzf "${WORK_DIR}/papirus.tar.gz" -C "${WORK_DIR}/src"
 cd "${WORK_DIR}/src/${SRC_DIR}"
 
-# 1) 安装 Papirus 各变体
 mkdir -p "${PAPIRUS_ICONS_DIR}"
 for theme in ${PAPIRUS_VARIANTS}; do
     if [ ! -d "${theme}" ]; then
@@ -72,7 +55,6 @@ for theme in ${PAPIRUS_VARIANTS}; do
     log "已安装 ${theme}"
 done
 
-# 2) 生成 papirus-mixed 混合主题
 PAPIRUS_DIR="${PAPIRUS_ICONS_DIR}/Papirus"
 THEME_DIR="${PAPIRUS_ICONS_DIR}/${MIXED_THEME_NAME}"
 if [ ! -d "${PAPIRUS_DIR}" ]; then
@@ -94,7 +76,6 @@ for size in */; do
     mkdir -p "${THEME_DIR}/${size}"
     for category in ${MIXED_CATEGORIES}; do
         if [ -d "${PAPIRUS_DIR}/${size}/${category}" ]; then
-            # 用相对软链：主题整体挪位置也不会失效
             ln -s "../../Papirus/${size}/${category}" "${THEME_DIR}/${size}/${category}"
         fi
     done
@@ -107,7 +88,7 @@ sed -i \
     -e "s|^Inherits=.*|Inherits=${MIXED_THEME_INHERITS}|" \
     "${THEME_DIR}/index.theme"
 
-# 图标文件必须全员可读（GDM、其他用户的进程也会读）
+# 保证GDM可读
 chmod -R a+rX "${THEME_DIR}"
 for theme in ${PAPIRUS_VARIANTS}; do
     chmod -R a+rX "${PAPIRUS_ICONS_DIR}/${theme}"

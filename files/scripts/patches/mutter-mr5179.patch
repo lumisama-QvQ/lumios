@@ -1,23 +1,6 @@
-# Backport of upstream merge request !5179
-#   "clutter/offscreen-effect: Preserve framebuffer pixel phase at fractional scales"
+# backport of mutter MR !5179 (upstream: unmerged)
 #   https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5179
-#
-# Upstream status: NOT merged (mutter main does not contain it as of 2026-11).
-# Base: mutter 51.1 (Fedora 45 / GNOME 51).
-#
-# This file contains the runtime part of the series only: the 4th commit
-# ("tests: Compare fractional offscreen rendering") is dropped, because the
-# Fedora build's test setup is not guaranteed to match the MR branch.
-#
-# Regenerated as an exact diff against the unmodified 51.1 sources, so it
-# applies with `patch -p1 --fuzz=0` (verified). Do not hand-edit; if mutter
-# is bumped, re-derive from the MR's .diff and re-verify with --fuzz=0.
-#
-# Commits included:
-#   3ecf994a96b1 compositor: Add a region inset helper
-#   0cd50fb9d353 compositor: Use sampling-safe opaque regions
-#   523777b18ae3 clutter/offscreen-effect: Preserve framebuffer pixel
-#   30705028bee4 (dropped) tests/stage-view: Compare fractional offscreen rendering
+
 --- a/clutter/clutter/clutter-deform-effect.c
 +++ b/clutter/clutter/clutter-deform-effect.c
 @@ -96,7 +96,11 @@

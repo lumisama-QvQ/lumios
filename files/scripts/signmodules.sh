@@ -21,7 +21,7 @@ if [ -z "$MODULE_NAME" ]; then
   exit 1
 fi
 
-# 没有配置内核签名私钥时跳过签名（镜像仍可构建，但需要在 BIOS 关闭 Secure Boot）
+# 无签名私钥时跳过；未签名需关闭 Secure Boot
 if [[ ! -s "/tmp/certs/private_key.priv" ]]; then
     echo "[signmodules] WARNING: 未找到内核签名私钥 /tmp/certs/private_key.priv，跳过模块签名"
     exit 0

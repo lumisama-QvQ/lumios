@@ -1,19 +1,5 @@
 #!/usr/bin/env bash
-# =============================================================================
-# legion-fix.sh —— 构建期安装 Legion Pro 7/7i Gen 10 的补丁内核 + 固件
-#
-# 执行时机：BlueBuild recipes.yml 顶部（任何其它模块之前）。
-# 做的事：
-#   1. 安装 aw88399（smart amp）与 mt7927（Wi-Fi/BT）固件，逐个校验上游 sha256；
-#   2. 下载上游最新 release 的补丁内核 RPM 包（校验 sha256）；
-#   3. 删除镜像中的 stock 内核（bootc/ostree 要求 /usr/lib/modules 下只保留一个内核目录）；
-#   4. 安装补丁内核 + kernel-devel（供后续 installnvidia.sh 编译 NVIDIA kmod）。
-#
-# 可配环境变量：
-#   LEGION_KERNEL_TAG   固定上游 release tag（默认自动解析最新，如 kernel-7.2.11-200.legion.fc44）
-#   LEGION_KERNEL_REPO  上游仓库（默认 marco-giunta/legion-pro7-gen10-audio）
-#   LEGION_DRY_RUN=1    只下载/校验/解包并打印 dnf 计划，不写 /usr、不执行 dnf（本地测试用）
-# =============================================================================
+# 安装 Legion Pro 7/7i Gen 10 的补丁内核与固件（环境变量见 AGENTS.md）。
 set -euo pipefail
 
 LEGION_KERNEL_REPO="${LEGION_KERNEL_REPO:-marco-giunta/legion-pro7-gen10-audio}"
@@ -22,7 +8,6 @@ LEGION_KERNEL_TAG="${LEGION_KERNEL_TAG:-}"
 DRY_RUN="${LEGION_DRY_RUN:-0}"
 RAW_BASE="https://raw.githubusercontent.com/${LEGION_KERNEL_REPO}/${LEGION_KERNEL_BRANCH}"
 
-# 固件
 FW_AW_DIR_URL="${RAW_BASE}/firmware/aw88399"
 FW_AW_DEST="/usr/lib/firmware/aw88399_acf.bin"
 FW_MT_BASE_URL="${RAW_BASE}/firmware/mt7927"
@@ -32,7 +17,6 @@ FW_MT_FILES=(
     "WIFI_RAM_CODE_MT6639_2_1.bin"
     "BT_RAM_CODE_MT6639_2_1_hdr.bin"
 )
-# Wi-Fi 固件若系统已带 linux-firmware 的官方 .xz，则优先使用官方版本（1=允许官方压缩版）
 FW_MT_OFFICIAL_XZ=(1 1 0)
 
 WORKDIR="$(mktemp -d /tmp/legion-fix.XXXXXX)"
@@ -51,13 +35,11 @@ for cmd in curl tar sha256sum rpm dnf find; do
 done
 
 download() {
-    # download <url> <输出文件>
     curl -fsSL --retry 3 --retry-delay 2 -o "$2" "$1" \
         || die "下载失败：$1"
 }
 
 verify_sha256() {
-    # verify_sha256 <sha256文件> <待校验文件>
     local sha_file="$1" target="$2" expected actual
     expected="$(awk 'NR==1 {print $1}' "${sha_file}")"
     [[ -n "${expected}" ]] || die "无法解析 sha256 文件：${sha_file}"
@@ -84,7 +66,6 @@ resolve_kernel_tag() {
 install_firmware() {
     info "安装固件"
 
-    # --- aw88399 smart amp ---
     local tmp_bin="${WORKDIR}/aw88399_acf.bin"
     local tmp_sha="${WORKDIR}/aw88399_acf.bin.sha256"
     info "下载 aw88399 固件"
@@ -98,7 +79,6 @@ install_firmware() {
         info "已安装 ${FW_AW_DEST}"
     fi
 
-    # --- mt7927 Wi-Fi / BT ---
     local i=0 name dest allow_official_xz
     for name in "${FW_MT_FILES[@]}"; do
         dest="${FW_MT_DIR}/${name}"
