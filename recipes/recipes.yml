@@ -82,11 +82,14 @@ modules:
         notify: false
         install:
           - io.github.kolunmi.Bazaar
+          - org.gtk.Gtk3theme.adw-gtk3
+          - org.gtk.Gtk3theme.adw-gtk3-dark
           - it.mijorus.gearlever
           - org.gnome.Calendar
           - org.gnome.FileRoller
           - org.gnome.TextEditor
           - org.gnome.NautilusPreviewer
+          - be.alexandervanhee.gradia
   - type: brew
     auto-upgrade: true
     brew-analytics: true
@@ -123,4 +126,3 @@ modules:
   - type: script
     scripts:
       - 1password.sh
-
