@@ -11,6 +11,7 @@ modules:
       copr:
         - scottames/ghostty
         - oak443/clash-verge-rev
+        - rivenirvana/morewaita-icon-theme
     install:
       packages:
         # 补丁+依赖
@@ -20,6 +21,7 @@ modules:
         - firefox-langpacks
         # 补充
         - micro
+        - morewaita-icon-theme
         - fish
         - smem
         - ibus-rime

@@ -1,72 +1,38 @@
-# lumios &nbsp; [![bluebuild build badge](https://github.com/lumisama-qvq/lumios/actions/workflows/build.yml/badge.svg)](https://github.com/lumisama-qvq/lumios/actions/workflows/build.yml)
+# lumios
 
-See the [BlueBuild docs](https://blue-build.org/how-to/setup/) for quick setup instructions for setting up your own repository based on this template.
+个人自用的 Fedora Silverblue（NVIDIA 开源驱动）镜像，用 [BlueBuild](https://blue-build.org) 构建。
 
-After setup, it is recommended you update this README to describe your custom image.
+- 基座：`ghcr.io/blue-build/base-images/fedora-silverblue-nvidia-open`（Fedora 45）
 
-## Installation
+## 切换到这个镜像
 
-> [!WARNING]  
-> [This is an experimental feature](https://www.fedoraproject.org/wiki/Changes/OstreeNativeContainerStable), try at your own discretion.
+> 实验性功能，风险自负。
 
-To rebase an existing atomic Fedora installation to the latest build:
+```bash
+sudo bootc switch ghcr.io/lumisama-qvq/lumios:latest
+systemctl reboot
+```
 
-- First rebase to the unsigned image, to get the proper signing keys and policies installed:
-  ```
-  rpm-ostree rebase ostree-unverified-registry:ghcr.io/lumisama-qvq/lumios:latest
-  ```
-- Reboot to complete the rebase:
-  ```
-  systemctl reboot
-  ```
-- Then rebase to the signed image, like so:
-  ```
-  rpm-ostree rebase ostree-image-signed:docker://ghcr.io/lumisama-qvq/lumios:latest
-  ```
-- Reboot again to complete the installation
-  ```
-  systemctl reboot
-  ```
+## 包含什么
 
-The `latest` tag will automatically point to the latest build. That build will still always use the Fedora version specified in `recipe.yml`, so you won't get accidentally updated to the next major version.
+- **移除**：gnome-software、htop、nvtop、ibus-mozc、ibus-unikey
+- **命令行**：fish、micro、smem、ibus-rime（含 librime-lua）、Homebrew
+- **桌面**：gnome-tweaks、Clash Verge Rev（COPR）、Bibata 光标 / Papirus 图标主题
+- **Flatpak**：Bazaar、Gear Lever、GNOME Calendar / FileRoller / TextEditor、Nautilus Previewer
+- **GNOME 扩展**：Blur my Shell、Dash to Dock、Vitals、Caffeine、AppIndicator、Fuzzy App Search、User Themes、Legacy Theme Switcher，以及 Gradia Capture（源码安装，见 `files/scripts/gradia-capture.sh`）
+- **字体**：Hack / FiraCode Nerd Font、Maple Mono NF CN、LXGW WenKai
 
-## ISO
+## 特色
 
-If build on Fedora Atomic, you can generate an offline ISO with the instructions available [here](https://blue-build.org/how-to/generate-iso/#_top). These ISOs cannot unfortunately be distributed on GitHub for free due to large sizes, so for public projects something else has to be used for hosting.
+### mutter 重建（`files/scripts/override-mutter.sh`）
 
-## Verification
+| 补丁 | 作用 | 上游 | 状态 |
+| --- | --- | --- | --- |
+| `mutter-mr5179.patch` | 修复特定情况下字体渲染模糊问题 | MR [!5179](https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5179) | **未合入**，backport |
+| `mutter-d5e397c2.patch` | 修复2k等分辨率下分数缩放黑边问题| commit [`d5e397c2`](https://gitlab.gnome.org/GNOME/mutter/-/commit/d5e397c2d4f5c35b648fc52edfac2228127e89fd) | 已合入，主动回退 |
 
-These images are signed with [Sigstore](https://www.sigstore.dev/)'s [cosign](https://github.com/sigstore/cosign). You can verify the signature by downloading the `cosign.pub` file from this repo and running the following command:
+## 验证签名
 
 ```bash
 cosign verify --key cosign.pub ghcr.io/lumisama-qvq/lumios
-```
-
-## mutter 补丁
-
-镜像不使用发行版直接提供的 mutter，而是由 [`files/scripts/override-mutter.sh`](files/scripts/override-mutter.sh) 在构建阶段下载 Fedora 的 mutter SRPM，打补丁后重新打包。
-
-当前携带两个补丁：
-
-| 补丁 | 目的 | 上游引用 | 状态 |
-| --- | --- | --- | --- |
-| [`patches/mutter-mr5179.patch`](files/scripts/patches/mutter-mr5179.patch) | 分数缩放下的 offscreen effect 像素相位，以及 opaque region 的采样安全边界 | MR [!5179](https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5179)（4 个提交） | **未合并**，backport |
-| [`patches/mutter-d5e397c2.patch`](files/scripts/patches/mutter-d5e397c2.patch) | **反向**应用 `shaped-texture: Disable blending for opaque regions`，恢复不透明区域的 blending | commit [`d5e397c2d4f5`](https://gitlab.gnome.org/GNOME/mutter/-/commit/d5e397c2d4f5c35b648fc52edfac2228127e89fd) | 上游已合入，我们主动回退 |
-
-两个补丁在 RPM `%prep` 里按固定顺序应用， `!5179` 的补丁是针对未改动的 51.1 源码生成的，而 `-R` 的上下文来自 d5e397c2 合入后的源码。
-
-### `mutter-mr5179.patch` 的来源
-
-- 基线：mutter **51.1**（Fedora 45 / GNOME 51）
-- 生成方式：先把完整 MR diff 打到一份未改动的 51.1 上，再与原始源码 `diff -u` 出精确补丁，所以能通过 `--fuzz=0`（原始 MR diff 在 `clutter-offscreen-effect.c` 的 hunk #2 需要 fuzz 2，不能直接用）
-
-重新生成的步骤：
-
-```bash
-curl -LO https://download.gnome.org/sources/mutter/51/mutter-51.1.tar.xz
-tar -xJf mutter-51.1.tar.xz
-curl -o mr.diff https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5179.diff
-# 1. 去掉 src/tests/ 相关的 diff 段
-# 2. 把剩余部分打到 mutter-51.1 的副本上
-# 3. 用 diff -u 生成精确补丁
 ```
