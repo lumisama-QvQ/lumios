@@ -1,0 +1,17 @@
+# app 自己生成的同名单元把 After=network-online.target 写死，而 drop-in 只能给
+# 依赖做加法（systemd 不允许用空赋值移除 After=/Wants=），所以要整份覆盖。
+# 放在 /etc 是为了和 app 的写入位置一致；它只在判定服务不可用或版本不符时才重装改写本文件。
+[Unit]
+Description=Clash Verge Service helps to launch Clash Core.
+After=nftables.service iptables.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/clash-verge-service
+Restart=always
+RestartSec=5
+RuntimeDirectory=clash-verge-service
+RuntimeDirectoryMode=0755
+
+[Install]
+WantedBy=multi-user.target

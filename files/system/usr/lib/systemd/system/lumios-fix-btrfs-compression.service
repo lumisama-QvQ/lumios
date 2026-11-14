@@ -1,0 +1,11 @@
+[Unit]
+Description=Fix btrfs transparent compression (fstab, rootflags, remount)
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/lumios-fix-btrfs-compression
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
