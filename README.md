@@ -31,17 +31,6 @@ systemctl reboot
 | `mutter-mr5179.patch`   | 修复特定情况下字体渲染模糊问题         | MR [!5179](https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5179)                                      | **未合入**，backport |
 | `mutter-d5e397c2.patch` | 修复2k等分辨率下分数缩放黑边的回归问题 | commit [`d5e397c2`](https://gitlab.gnome.org/GNOME/mutter/-/commit/d5e397c2d4f5c35b648fc52edfac2228127e89fd) | 已合入，主动回退     |
 
-### Clash Verge 服务单元（`files/system/etc/systemd/system/clash-verge-service.service`）
-
-clash-verge-rev自己生成的服务单元把 `After=network-online.target` 写死在模板里，而 `network-online.target` 要等 `NetworkManager-wait-online` 在现代电脑上较高的性能有时会导致gui比网络更早启动，app 判定 IPC 不可用，于是每次开机都要 pkexec 重装一遍服务。
-
-根据[systemd#18154](https://github.com/systemd/systemd/issues/18154)，空赋值只重置普通列表，所以采取整份覆盖同名单元：
-
-| 项          | 值                                  |
-| ----------- | ----------------------------------- |
-| `After=`    | `nftables.service iptables.service` |
-| `ExecStart` | `/usr/bin/clash-verge-service`      |
-
 ### btrfs 透明压缩（`files/system/usr/libexec/lumios-fix-btrfs-compression`）
 
 silverblue自43起存在透明压缩未预期启用的问题（[ostree#72](https://gitlab.com/fedora/ostree/sig/-/work_items/72)），但如今仍未修复

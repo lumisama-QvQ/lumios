@@ -33,7 +33,6 @@ modules:
     system:
       enabled:
         - lumios-fix-btrfs-compression.service
-        - clash-verge-service.service
 
   # L2 核心补丁：低频，构建慢
   - type: script
