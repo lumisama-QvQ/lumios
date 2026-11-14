@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# 安装 Gradia Capture（GNOME 扩展），说明见 AGENTS.md。
+# 安装 Gradia Capture（GNOME 扩展），跟随上游 master。
 set -euxo pipefail
 
 UUID="gradia-integration@alexandervanhee.github.io"
 REPO="AlexanderVanhee/gradia-capture"
-# 固定提交
-REF="0b7e47e1e5c1e68e234e4d2d24b307e1da1d18a9"
+REF="${GRADIA_REF:-master}"
 
 DEST="/usr/share/gnome-shell/extensions/${UUID}"
 
@@ -13,7 +12,7 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 echo "==> 下载 gradia-capture ${REF:0:12}"
-curl -fsSL --retry 3 "https://codeload.github.com/${REPO}/tar.gz/${REF}" -o "$WORK/src.tar.gz"
+curl -fsSL --retry 3 "https://codeload.github.com/${REPO}/tar.gz/refs/heads/${REF}" -o "$WORK/src.tar.gz"
 tar -xzf "$WORK/src.tar.gz" -C "$WORK"
 SRC="$(find "$WORK" -maxdepth 1 -mindepth 1 -type d | head -n1)"
 

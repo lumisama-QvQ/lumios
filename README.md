@@ -17,7 +17,7 @@ systemctl reboot
 
 - **移除**：gnome-software、htop、nvtop、ibus-mozc、ibus-unikey
 - **命令行**：fish、micro、smem、ibus-rime（含 librime-lua）、Homebrew
-- **桌面**：gnome-tweaks、Clash Verge Rev（COPR）、Bibata 光标 / Papirus 图标主题
+- **桌面**：gnome-tweaks、Clash Verge Rev（COPR）、Bibata 光标 / MoreWaita 图标
 - **Flatpak**：Bazaar、Gear Lever、GNOME Calendar / FileRoller / TextEditor、Nautilus Previewer
 - **GNOME 扩展**：Blur my Shell、Dash to Dock、Vitals、Caffeine、AppIndicator、Fuzzy App Search、User Themes、Legacy Theme Switcher，以及 Gradia Capture（源码安装，见 `files/scripts/gradia-capture.sh`）
 - **字体**：Hack / FiraCode Nerd Font、Maple Mono NF CN、LXGW WenKai

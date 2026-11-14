@@ -66,18 +66,32 @@ modules:
         - name: lxgw-wenkai
           url: https://github.com/lxgw/LxgwWenKai/releases/download/v1.530/lxgw-wenkai-v1.530.tar.gz
 
-  # L6 固定版本资源：pin 了 tag / commit
+  # L6 固定版本资源：pin 了 tag
   - type: script
     scripts:
       - bibata-cursors.sh
-      - gradia-capture.sh
 
-  # L7 桌面软件：COPR，跟随上游
+  # L7 低增量：flatpak 只写配置，brew 的升级在运行时
+  - type: default-flatpaks
+    configurations:
+      - scope: system
+        notify: false
+        install:
+          - io.github.kolunmi.Bazaar
+          - it.mijorus.gearlever
+          - org.gnome.Calendar
+          - org.gnome.FileRoller
+          - org.gnome.TextEditor
+          - org.gnome.NautilusPreviewer
+  - type: brew
+    auto-upgrade: true
+    brew-analytics: true
+
+  # L8 桌面软件：COPR，跟随上游
   - type: dnf
     repos:
       cleanup: true
       copr:
-        - scottames/ghostty
         - oak443/clash-verge-rev
         - rivenirvana/morewaita-icon-theme
     install:
@@ -86,7 +100,7 @@ modules:
         - morewaita-icon-theme
         - clash-verge-rev
 
-  # L8 在线最新：每次构建都可能变
+  # L9 在线最新：每次构建都可能变
   - type: gnome-extensions
     install:
       - Blur my Shell
@@ -100,26 +114,9 @@ modules:
       - IBus Tweaker
   - type: script
     scripts:
-      - papirus-icons.sh
       - bazzar-companion
+      - gradia-capture.sh
   - type: script
     scripts:
       - 1password.sh
 
-  # L9 Flatpak
-  - type: default-flatpaks
-    configurations:
-      - scope: system
-        notify: false
-        install:
-          - io.github.kolunmi.Bazaar
-          - it.mijorus.gearlever
-          - org.gnome.Calendar
-          - org.gnome.FileRoller
-          - org.gnome.TextEditor
-          - org.gnome.NautilusPreviewer
-
-  # L10 工具链：体积最大，auto-upgrade 每次构建都变
-  - type: brew
-    auto-upgrade: true
-    brew-analytics: true
