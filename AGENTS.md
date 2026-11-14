@@ -3,6 +3,7 @@
 拆分在 `AGENTS/`，按需查阅。动手前至少先读结构与环境约束：
 
 - [仓库结构](AGENTS/structure.md)
+- [分层与权重](AGENTS/layers.md)
 - [构建环境](AGENTS/build-env.md)
 - [1Password](AGENTS/1password.md)
 - [mutter 补丁](AGENTS/mutter.md)

@@ -26,10 +26,10 @@ systemctl reboot
 
 ### mutter 重建（`files/scripts/override-mutter.sh`）
 
-| 补丁 | 作用 | 上游 | 状态 |
-| --- | --- | --- | --- |
-| `mutter-mr5179.patch` | 修复特定情况下字体渲染模糊问题 | MR [!5179](https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5179) | **未合入**，backport |
-| `mutter-d5e397c2.patch` | 修复2k等分辨率下分数缩放黑边问题| commit [`d5e397c2`](https://gitlab.gnome.org/GNOME/mutter/-/commit/d5e397c2d4f5c35b648fc52edfac2228127e89fd) | 已合入，主动回退 |
+| 补丁                    | 作用                                   | 上游                                                                                                         | 状态                 |
+| ----------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------- |
+| `mutter-mr5179.patch`   | 修复特定情况下字体渲染模糊问题         | MR [!5179](https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5179)                                      | **未合入**，backport |
+| `mutter-d5e397c2.patch` | 修复2k等分辨率下分数缩放黑边的回归问题 | commit [`d5e397c2`](https://gitlab.gnome.org/GNOME/mutter/-/commit/d5e397c2d4f5c35b648fc52edfac2228127e89fd) | 已合入，主动回退     |
 
 ## 验证签名
 

@@ -5,16 +5,121 @@ description: 个人自用的 Fedora Silverblue (NVIDIA) 镜像。
 base-image: ghcr.io/blue-build/base-images/fedora-silverblue-nvidia-open
 image-version: 45
 platforms:
-- linux/amd64
+  - linux/amd64
 modules:
-- type: dnf
-  remove:
-    packages:
-      - ibus-unikey
-      - ibus-mozc
-    auto-remove: false
-- type: script
-  scripts:
-    - override-mutter.sh
-- from-file: custom.yml
-- type: signing
+  # L1 基线：几乎不变
+  - type: dnf
+    remove:
+      packages:
+        - ibus-unikey
+        - ibus-mozc
+      auto-remove: false
+  - type: dnf
+    group-remove:
+      packages:
+        - development-tools
+        - gnome-shell-extension-*
+    remove:
+      packages:
+        - nvtop
+        - gnome-software
+        - htop
+      auto-remove: true
+  - type: signing
+  - type: files
+    files:
+      - source: system
+        destination: /
+
+  # L2 核心补丁：低频，构建慢
+  - type: script
+    scripts:
+      - override-mutter.sh
+
+  # L3 系统软件：跟随 Fedora
+  - type: dnf
+    install:
+      packages:
+        - libgda
+        - libgda-sqlite
+        - librime-lua
+        - firefox-langpacks
+        - ibus-rime
+
+  # L4 CLI：低频，体积小
+  - type: dnf
+    install:
+      packages:
+        - micro
+        - fish
+        - smem
+
+  # L5 字体：固定 URL，体积大
+  - type: fonts
+    fonts:
+      nerd-fonts:
+        - hack
+        - FiraCode
+      url-fonts:
+        - name: Maple-Mono-NF-CN
+          url: https://github.com/subframe7536/maple-font/releases/download/v7.9/MapleMono-NF-CN-unhinted.zip
+        - name: lxgw-wenkai
+          url: https://github.com/lxgw/LxgwWenKai/releases/download/v1.530/lxgw-wenkai-v1.530.tar.gz
+
+  # L6 固定版本资源：pin 了 tag / commit
+  - type: script
+    scripts:
+      - bibata-cursors.sh
+      - gradia-capture.sh
+
+  # L7 桌面软件：COPR，跟随上游
+  - type: dnf
+    repos:
+      cleanup: true
+      copr:
+        - scottames/ghostty
+        - oak443/clash-verge-rev
+        - rivenirvana/morewaita-icon-theme
+    install:
+      packages:
+        - gnome-tweaks
+        - morewaita-icon-theme
+        - clash-verge-rev
+
+  # L8 在线最新：每次构建都可能变
+  - type: gnome-extensions
+    install:
+      - Blur my Shell
+      - AppIndicator and KStatusNotifierItem Support
+      - Caffeine
+      - GNOME Fuzzy App Search
+      - User Themes
+      - Vitals
+      - Dash to Dock
+      - Legacy (GTK3) Theme Scheme Auto Switcher
+      - IBus Tweaker
+  - type: script
+    scripts:
+      - papirus-icons.sh
+      - bazzar-companion
+  - type: script
+    scripts:
+      - 1password.sh
+
+  # L9 Flatpak
+  - type: default-flatpaks
+    configurations:
+      - scope: system
+        notify: false
+        install:
+          - io.github.kolunmi.Bazaar
+          - it.mijorus.gearlever
+          - org.gnome.Calendar
+          - org.gnome.FileRoller
+          - org.gnome.TextEditor
+          - org.gnome.NautilusPreviewer
+
+  # L10 工具链：体积最大，auto-upgrade 每次构建都变
+  - type: brew
+    auto-upgrade: true
+    brew-analytics: true
