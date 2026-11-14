@@ -1,22 +1,36 @@
 #!/usr/bin/env bash
-# Override Fedora's mutter with a locally rebuilt RPM that reverts
-# upstream commit d5e397c2 ("shaped-texture: Disable blending for opaque regions").
+# Override Fedora's mutter with a locally rebuilt RPM that carries two patches:
 #
-# The official commit patch is vendored in patches/mutter-d5e397c2.patch and is
-# applied in reverse (patch -R) during the RPM %prep stage. The resulting RPM
-# gets a ".override" release suffix so dnf prefers it over the repository build.
+#   1. patches/mutter-mr5179.patch   — backport of upstream merge request !5179
+#      ("clutter/offscreen-effect: Preserve framebuffer pixel phase at
+#      fractional scales"). Still UNMERGED upstream; runtime part only, the
+#      series' test commit is dropped.
+#   2. patches/mutter-d5e397c2.patch — upstream commit d5e397c2
+#      ("shaped-texture: Disable blending for opaque regions"), applied in
+#      reverse, i.e. restoring blending for opaque regions.
+#
+# Both are applied in the RPM %prep stage, in that order: !5179 first (its diff
+# was generated against the unmodified 51.1 sources), then d5e397c2 reversed.
+# The resulting RPM gets an ".override.N" release suffix so dnf prefers it over
+# both the repository build and any earlier local override build.
 #
 # Environment:
 #   MUTTER_KEEP_WORKDIR=1  keep the temporary build tree for inspection
+#   MUTTER_OVERRIDE_REL=…  override the release suffix (default: override.2)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-PATCH_FILE="${SCRIPT_DIR}/patches/mutter-d5e397c2.patch"
-PATCH_NAME="mutter-d5e397c2.patch"
+REVERT_PATCH_FILE="${SCRIPT_DIR}/patches/mutter-d5e397c2.patch"
+REVERT_PATCH_NAME="mutter-d5e397c2.patch"
+BACKPORT_PATCH_FILE="${SCRIPT_DIR}/patches/mutter-mr5179.patch"
+BACKPORT_PATCH_NAME="mutter-mr5179.patch"
 WORKDIR="$(mktemp -d /var/tmp/mutter-build.XXXXXX)"
 KEEP_WORKDIR="${MUTTER_KEEP_WORKDIR:-0}"
+OVERRIDE_REL="${MUTTER_OVERRIDE_REL:-override.2}"
 BLEND_LINE='cogl_pipeline_set_blend (pipeline, "RGBA = ADD (SRC_COLOR, 0)", NULL);'
+# Symbol introduced by merge request !5179; used as a "did the backport land" marker.
+BACKPORT_MARKER='sampling_opaque_region'
 
 info() { echo "[mutter-override] $*"; }
 die() { echo "[mutter-override] ERROR: $*" >&2; exit 1; }
@@ -31,7 +45,10 @@ cleanup() {
 trap cleanup EXIT
 
 [[ "$(id -u)" -eq 0 ]] || die "must run as root"
-[[ -f "${PATCH_FILE}" ]] || die "patch not found: ${PATCH_FILE}"
+[[ -f "${REVERT_PATCH_FILE}" ]] || die "patch not found: ${REVERT_PATCH_FILE}"
+[[ -f "${BACKPORT_PATCH_FILE}" ]] || die "patch not found: ${BACKPORT_PATCH_FILE}"
+grep -q "${BACKPORT_MARKER}" "${BACKPORT_PATCH_FILE}" \
+    || die "backport patch does not mention ${BACKPORT_MARKER}; wrong file?"
 
 info "Work directory: ${WORKDIR}"
 
@@ -93,25 +110,39 @@ fi
 info "Found 2 blend lines in upstream source (as expected)"
 
 ##################################
-# Patch spec and reverse-apply
+# Patch spec: apply the !5179 backport, then reverse-apply d5e397c2
 ##################################
 info "Patching mutter.spec"
-cp "${PATCH_FILE}" "${RPMBUILD_DIR}/SOURCES/${PATCH_NAME}"
+cp "${REVERT_PATCH_FILE}" "${RPMBUILD_DIR}/SOURCES/${REVERT_PATCH_NAME}"
+cp "${BACKPORT_PATCH_FILE}" "${RPMBUILD_DIR}/SOURCES/${BACKPORT_PATCH_NAME}"
 
-# Declare the patch as a Source so %%autosetup does not apply it forwards;
-# it is applied explicitly with -R right after %%autosetup.
-sed -i "/^Source0:/a Source1000:       ${PATCH_NAME}" "${SPEC}"
-sed -i '/^%autosetup/a patch -R -p1 --fuzz=0 < %{SOURCE1000}' "${SPEC}"
+# Declare both patches as Sources so %autosetup does not apply them forwards;
+# they are applied explicitly right after %autosetup, in this order:
+#   SOURCE1001  !5179 backport   (exact diff against unmodified 51.1 sources)
+#   SOURCE1000  d5e397c2 reversed (must come second: its context predates !5179)
+sed -i "/^Source0:/a Source1000:       ${REVERT_PATCH_NAME}\nSource1001:       ${BACKPORT_PATCH_NAME}" "${SPEC}"
+sed -i "/^%autosetup/a patch -p1 --fuzz=0 < %{SOURCE1001}\npatch -R -p1 --fuzz=0 < %{SOURCE1000}" "${SPEC}"
 
-# Bump the release so dnf treats the local build as newer than the repo package.
+# Bump the release so dnf treats this build as newer than both the repo package
+# and any previous ".override" build. Without a bump, dnf would consider the
+# already-installed RPM identical and skip the install.
 read -r SRC_VER SRC_REL < <(rpm -qp --qf '%{VERSION} %{RELEASE}\n' "${SRC_RPM}")
 [[ -n "${SRC_VER}" && -n "${SRC_REL}" ]] || die "could not read source RPM version"
-NEW_REL="${SRC_REL}.override"
+NEW_REL="${SRC_REL}.${OVERRIDE_REL}"
 sed -i "s/^Release:.*/Release:       ${NEW_REL}/" "${SPEC}"
 
-grep -q "^Source1000:.*${PATCH_NAME}" "${SPEC}" || die "failed to add Source1000 to spec"
+grep -q "^Source1000:.*${REVERT_PATCH_NAME}" "${SPEC}" || die "failed to add Source1000 to spec"
+grep -q "^Source1001:.*${BACKPORT_PATCH_NAME}" "${SPEC}" || die "failed to add Source1001 to spec"
+grep -q '^patch -p1 --fuzz=0 < %{SOURCE1001}' "${SPEC}" || die "failed to add backport patch command to spec"
 grep -q '^patch -R -p1 --fuzz=0 < %{SOURCE1000}' "${SPEC}" || die "failed to add reverse patch command to spec"
 grep -q "^Release:.*${NEW_REL}" "${SPEC}" || die "failed to set release suffix"
+
+# The backport has to be applied before the reverse patch, otherwise the
+# reverse patch's context no longer matches.
+line_backport="$(grep -n '^patch -p1 --fuzz=0 < %{SOURCE1001}' "${SPEC}" | cut -d: -f1)"
+line_revert="$(grep -n '^patch -R -p1 --fuzz=0 < %{SOURCE1000}' "${SPEC}" | cut -d: -f1)"
+[[ -n "${line_backport}" && -n "${line_revert}" && "${line_backport}" -lt "${line_revert}" ]] \
+    || die "spec applies the patches in the wrong order (!5179 must come first)"
 
 info "Building mutter ${SRC_VER}-${NEW_REL}"
 
@@ -124,14 +155,18 @@ dnf builddep -y --spec "${SPEC}"
 info "Running rpmbuild"
 rpmbuild -bb --noclean --define "_topdir ${RPMBUILD_DIR}" "${SPEC}"
 
-# Post-build: confirm the reverse patch really removed both lines.
+# Post-build: verify both patches really landed in the built sources.
 BUILD_SRC="$(find "${RPMBUILD_DIR}/BUILD" -path '*/src/compositor/meta-shaped-texture.c' -print -quit)"
 [[ -n "${BUILD_SRC}" ]] || die "patched source file not found after build"
 remaining="$(grep -cF "${BLEND_LINE}" "${BUILD_SRC}" || true)"
 if [[ "${remaining}" != "0" ]]; then
     die "reverse patch did not remove blend lines; ${remaining} remaining in ${BUILD_SRC}"
 fi
-info "Reverse patch verified: blend lines removed from built source"
+backported="$(grep -c "${BACKPORT_MARKER}" "${BUILD_SRC}" || true)"
+if [[ "${backported}" -eq 0 ]]; then
+    die "backport !5179 missing: no '${BACKPORT_MARKER}' in ${BUILD_SRC}"
+fi
+info "Both patches verified: blend lines removed, ${backported} '${BACKPORT_MARKER}' occurrences present"
 
 ##################################
 # Install override

@@ -1,0 +1,955 @@
+# Backport of upstream merge request !5179
+#   "clutter/offscreen-effect: Preserve framebuffer pixel phase at fractional scales"
+#   https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5179
+#
+# Upstream status: NOT merged (mutter main does not contain it as of 2026-11).
+# Base: mutter 51.1 (Fedora 45 / GNOME 51).
+#
+# This file contains the runtime part of the series only: the 4th commit
+# ("tests: Compare fractional offscreen rendering") is dropped, because the
+# Fedora build's test setup is not guaranteed to match the MR branch.
+#
+# Regenerated as an exact diff against the unmodified 51.1 sources, so it
+# applies with `patch -p1 --fuzz=0` (verified). Do not hand-edit; if mutter
+# is bumped, re-derive from the MR's .diff and re-verify with --fuzz=0.
+#
+# Commits included:
+#   3ecf994a96b1 compositor: Add a region inset helper
+#   0cd50fb9d353 compositor: Use sampling-safe opaque regions
+#   523777b18ae3 clutter/offscreen-effect: Preserve framebuffer pixel
+#   30705028bee4 (dropped) tests/stage-view: Compare fractional offscreen rendering
+--- a/clutter/clutter/clutter-deform-effect.c
++++ b/clutter/clutter/clutter-deform-effect.c
+@@ -96,7 +96,11 @@
+ 
+   gulong allocation_id;
+ 
++  gfloat target_width;
++  gfloat target_height;
++
+   guint is_dirty : 1;
++  guint has_target_size : 1;
+ } ClutterDeformEffectPrivate;
+ 
+ enum
+@@ -193,13 +197,22 @@
+     clutter_deform_effect_get_instance_private (self);
+   CoglPipeline *pipeline;
+   CoglDepthState depth_state;
++  gfloat width, height;
++  gboolean has_target_size;
++
++  has_target_size =
++    clutter_offscreen_effect_get_target_size (effect, &width, &height);
++  if (has_target_size != priv->has_target_size ||
++      (has_target_size &&
++       (priv->target_width != width ||
++        priv->target_height != height)))
++    priv->is_dirty = TRUE;
+ 
+   if (priv->is_dirty)
+     {
+       gboolean mapped_buffer;
+       ClutterVertexP3T2C4 *verts;
+       ClutterActor *actor;
+-      gfloat width, height;
+       guint opacity;
+       gint i, j;
+ 
+@@ -209,7 +222,7 @@
+       /* if we don't have a target size, fall back to the actor's
+        * allocation, though wrong it might be
+        */
+-      if (!clutter_offscreen_effect_get_target_size (effect, &width, &height))
++      if (!has_target_size)
+         clutter_actor_get_size (actor, &width, &height);
+ 
+       /* XXX ideally, the sub-classes should tell us what they
+@@ -288,6 +301,9 @@
+         }
+ 
+       priv->is_dirty = FALSE;
++      priv->has_target_size = has_target_size;
++      priv->target_width = width;
++      priv->target_height = height;
+     }
+ 
+   pipeline = clutter_offscreen_effect_get_pipeline (effect);
+--- a/clutter/clutter/clutter-offscreen-effect.c
++++ b/clutter/clutter/clutter-offscreen-effect.c
+@@ -112,8 +112,13 @@
+   ClutterActor *actor;
+   ClutterActor *stage;
+ 
+-  int fbo_offset_x;
+-  int fbo_offset_y;
++  float fbo_offset_x;
++  float fbo_offset_y;
++  float source_phase_x;
++  float source_phase_y;
++  float source_resource_scale;
++  gboolean has_source_phase;
++  ClutterActorBox source_box;
+ 
+   /* This is the calculated size of the fbo before being passed
+      through create_texture(). This needs to be tracked separately so
+@@ -129,6 +134,154 @@
+                                      clutter_offscreen_effect,
+                                      CLUTTER_TYPE_EFFECT)
+ 
++#define OFFSCREEN_PHASE_EPSILON (1.0f / 256.0f)
++
++static void
++transform_framebuffer_points (CoglFramebuffer          *framebuffer,
++                              const graphene_point3d_t *points,
++                              graphene_point3d_t       *transformed_points,
++                              int                       n_points)
++{
++  graphene_matrix_t modelview;
++  graphene_matrix_t projection;
++  graphene_matrix_t modelview_projection;
++  float viewport[4];
++  int i;
++
++  cogl_framebuffer_get_modelview_matrix (framebuffer, &modelview);
++  cogl_framebuffer_get_projection_matrix (framebuffer, &projection);
++  cogl_framebuffer_get_viewport4fv (framebuffer, viewport);
++
++  /* The shared transform helper rounds to 1/256ths, which would lose the
++   * framebuffer phase this function needs to preserve.
++   */
++  graphene_matrix_multiply (&modelview,
++                            &projection,
++                            &modelview_projection);
++
++  for (i = 0; i < n_points; i++)
++    {
++      graphene_vec4_t point;
++      graphene_vec4_t transformed_point;
++      float w;
++
++      graphene_vec4_init (&point,
++                          points[i].x,
++                          points[i].y,
++                          points[i].z,
++                          1.0f);
++      graphene_matrix_transform_vec4 (&modelview_projection,
++                                      &point,
++                                      &transformed_point);
++      w = graphene_vec4_get_w (&transformed_point);
++      transformed_points[i].x =
++        ((((graphene_vec4_get_x (&transformed_point) / w) + 1.0f) / 2.0f) *
++         viewport[2]) + viewport[0];
++      transformed_points[i].y =
++        viewport[1] + viewport[3] -
++        ((((graphene_vec4_get_y (&transformed_point) / w) + 1.0f) / 2.0f) *
++         viewport[3]);
++      transformed_points[i].z = 0.0f;
++    }
++}
++
++static gboolean
++get_framebuffer_phase (CoglFramebuffer       *framebuffer,
++                       float                  resource_scale,
++                       const ClutterActorBox *box,
++                       float                 *phase_x,
++                       float                 *phase_y)
++{
++  graphene_matrix_t modelview_projection;
++  const graphene_point3d_t test_points[] = {
++    GRAPHENE_POINT3D_INIT_ZERO,
++    GRAPHENE_POINT3D_INIT (box->x1, box->y1, 0.0f),
++    GRAPHENE_POINT3D_INIT (box->x2, box->y1, 0.0f),
++    GRAPHENE_POINT3D_INIT (box->x1, box->y2, 0.0f),
++    GRAPHENE_POINT3D_INIT (box->x2, box->y2, 0.0f),
++  };
++  graphene_vec4_t homogeneous_points[G_N_ELEMENTS (test_points)];
++  graphene_point3d_t transformed_points[G_N_ELEMENTS (test_points)];
++  graphene_vec4_t transformed_homogeneous_points[G_N_ELEMENTS (test_points)];
++  graphene_matrix_t modelview;
++  graphene_matrix_t projection;
++  float origin_w;
++  int i;
++
++  /* Phase can only be preserved when the complete source box maps to the
++   * expected axis-aligned pixel grid. Checking its corners also prevents a
++   * small per-unit transform error from accumulating across a large actor.
++   */
++  for (i = 0; i < G_N_ELEMENTS (test_points); i++)
++    graphene_vec4_init (&homogeneous_points[i],
++                        test_points[i].x,
++                        test_points[i].y,
++                        test_points[i].z,
++                        1.0f);
++
++  cogl_framebuffer_get_modelview_matrix (framebuffer, &modelview);
++  cogl_framebuffer_get_projection_matrix (framebuffer, &projection);
++  graphene_matrix_multiply (&modelview,
++                            &projection,
++                            &modelview_projection);
++
++  for (i = 0; i < G_N_ELEMENTS (homogeneous_points); i++)
++    graphene_matrix_transform_vec4 (&modelview_projection,
++                                    &homogeneous_points[i],
++                                    &transformed_homogeneous_points[i]);
++
++  origin_w = graphene_vec4_get_w (&transformed_homogeneous_points[0]);
++  for (i = 1; i < G_N_ELEMENTS (transformed_homogeneous_points); i++)
++    {
++      if (!G_APPROX_VALUE (
++            graphene_vec4_get_w (&transformed_homogeneous_points[i]),
++            origin_w,
++            FLT_EPSILON))
++        return FALSE;
++    }
++
++  transform_framebuffer_points (framebuffer,
++                                test_points,
++                                transformed_points,
++                                G_N_ELEMENTS (test_points));
++
++  for (i = 1; i < G_N_ELEMENTS (transformed_points); i++)
++    {
++      if (!G_APPROX_VALUE (
++            transformed_points[i].x - transformed_points[0].x,
++            test_points[i].x * resource_scale,
++            OFFSCREEN_PHASE_EPSILON) ||
++          !G_APPROX_VALUE (
++            transformed_points[i].y - transformed_points[0].y,
++            test_points[i].y * resource_scale,
++            OFFSCREEN_PHASE_EPSILON))
++        return FALSE;
++    }
++
++  *phase_x = transformed_points[0].x - floorf (transformed_points[0].x);
++  *phase_y = transformed_points[0].y - floorf (transformed_points[0].y);
++
++  if (*phase_x < OFFSCREEN_PHASE_EPSILON ||
++      1.0f - *phase_x < OFFSCREEN_PHASE_EPSILON)
++    *phase_x = 0.0f;
++  if (*phase_y < OFFSCREEN_PHASE_EPSILON ||
++      1.0f - *phase_y < OFFSCREEN_PHASE_EPSILON)
++    *phase_y = 0.0f;
++
++  return TRUE;
++}
++
++static gboolean
++phases_equal (float phase1,
++              float phase2)
++{
++  float delta;
++
++  delta = phase1 - phase2;
++  delta -= roundf (delta);
++  return fabsf (delta) < OFFSCREEN_PHASE_EPSILON;
++}
++
+ static void
+ real_resource_scale_changed (ClutterOffscreenEffect *self)
+ {
+@@ -178,8 +331,9 @@
+ }
+ 
+ static void
+-ensure_pipeline_filter_for_scale (ClutterOffscreenEffect *self,
+-                                  float                   resource_scale)
++ensure_pipeline_filter (ClutterOffscreenEffect *self,
++                        float                   resource_scale,
++                        gboolean                is_phase_correct)
+ {
+   ClutterOffscreenEffectPrivate *priv =
+     clutter_offscreen_effect_get_instance_private (self);
+@@ -188,13 +342,7 @@
+   if (!priv->pipeline)
+     return;
+ 
+-  /* If no fractional scaling is set, we're always going to render the texture
+-     at a 1:1 texel:pixel ratio so, in such case we can use 'nearest' filtering
+-     to decrease the effects of rounding errors in the geometry calculation;
+-     if instead we we're using a global fractional scaling we need to make sure
+-     that we're using the default linear effect, not to create artifacts when
+-     scaling down the texture */
+-  if (fmodf (resource_scale, 1.0f) == 0)
++  if (is_phase_correct && fmodf (resource_scale, 1.0f) == 0.0f)
+     filter = COGL_PIPELINE_FILTER_NEAREST;
+   else
+     filter = COGL_PIPELINE_FILTER_LINEAR;
+@@ -207,16 +355,10 @@
+ clutter_offscreen_effect_real_create_pipeline (ClutterOffscreenEffect *effect,
+                                                CoglTexture            *texture)
+ {
+-  ClutterOffscreenEffectPrivate *priv =
+-    clutter_offscreen_effect_get_instance_private (effect);
+   CoglContext *ctx = cogl_texture_get_context (texture);
+   CoglPipeline *pipeline;
+-  float resource_scale;
+-
+-  resource_scale = clutter_actor_get_real_resource_scale (priv->actor);
+ 
+   pipeline = cogl_pipeline_new (ctx);
+-  ensure_pipeline_filter_for_scale (effect, resource_scale);
+   cogl_pipeline_set_layer_texture (pipeline, 0, texture);
+ 
+   return pipeline;
+@@ -257,7 +399,9 @@
+       priv->target_height == target_height &&
+       priv->offscreen != NULL)
+     {
+-      ensure_pipeline_filter_for_scale (self, resource_scale);
++      ensure_pipeline_filter (self,
++                              resource_scale,
++                              priv->has_source_phase);
+       return TRUE;
+     }
+ 
+@@ -296,6 +440,10 @@
+   g_clear_object (&priv->pipeline);
+   priv->pipeline = offscreen_class->create_pipeline (self, priv->texture);
+ 
++  ensure_pipeline_filter (self,
++                          resource_scale,
++                          priv->has_source_phase);
++
+   return TRUE;
+ }
+ 
+@@ -308,14 +456,22 @@
+   ClutterOffscreenEffectPrivate *priv =
+     clutter_offscreen_effect_get_instance_private (self);
+   CoglFramebuffer *offscreen;
++  CoglFramebuffer *source_framebuffer;
+   ClutterActorBox raw_box, box;
+   ClutterActor *stage;
+   graphene_matrix_t projection, modelview, transform;
+   const ClutterPaintVolume *volume;
+   gfloat stage_width, stage_height;
+-  gfloat target_width = -1, target_height = -1;
++  int target_width, target_height;
++  int target_x1, target_y1;
++  int target_x2, target_y2;
+   float resource_scale;
+-  float ceiled_resource_scale;
++  const graphene_point3d_t local_origin = GRAPHENE_POINT3D_INIT_ZERO;
++  graphene_point3d_t offscreen_origin;
++  float source_phase_x = 0.0f;
++  float source_phase_y = 0.0f;
++  float desired_origin_x;
++  float desired_origin_y;
+ 
+   if (!clutter_actor_meta_get_enabled (CLUTTER_ACTOR_META (effect)))
+     goto disable_effect;
+@@ -327,10 +483,8 @@
+   clutter_actor_get_size (stage, &stage_width, &stage_height);
+ 
+   resource_scale = clutter_actor_get_real_resource_scale (priv->actor);
+-
+-  ceiled_resource_scale = ceilf (resource_scale);
+-  stage_width *= ceiled_resource_scale;
+-  stage_height *= ceiled_resource_scale;
++  stage_width *= resource_scale;
++  stage_height *= resource_scale;
+ 
+   /* Get the minimal bounding box for what we want to paint, relative to the
+    * parent of priv->actor. Note that we may actually be painting a clone of
+@@ -348,9 +502,6 @@
+ 
+       box = raw_box;
+       _clutter_actor_box_enlarge_for_effects (&box);
+-
+-      priv->fbo_offset_x = (int) box.x1;
+-      priv->fbo_offset_y = (int) box.y1;
+     }
+   else
+     {
+@@ -359,18 +510,45 @@
+       box = raw_box;
+       _clutter_actor_box_enlarge_for_effects (&box);
+ 
+-      priv->fbo_offset_x = (int) (box.x1 - raw_box.x1);
+-      priv->fbo_offset_y = (int) (box.y1 - raw_box.y1);
++      box.x1 -= raw_box.x1;
++      box.y1 -= raw_box.y1;
++      box.x2 -= raw_box.x1;
++      box.y2 -= raw_box.y1;
+     }
+ 
+-  clutter_actor_box_scale (&box, ceiled_resource_scale);
+-  clutter_actor_box_get_size (&box, &target_width, &target_height);
++  priv->source_box = box;
++  source_framebuffer = clutter_paint_context_get_framebuffer (paint_context);
++  priv->has_source_phase =
++    get_framebuffer_phase (source_framebuffer,
++                           resource_scale,
++                           &priv->source_box,
++                           &source_phase_x,
++                           &source_phase_y);
++  priv->source_phase_x = source_phase_x;
++  priv->source_phase_y = source_phase_y;
++  priv->source_resource_scale = resource_scale;
++
++  clutter_actor_box_scale (&box, resource_scale);
++  clutter_round_to_256ths (&box.x1);
++  clutter_round_to_256ths (&box.y1);
++  clutter_round_to_256ths (&box.x2);
++  clutter_round_to_256ths (&box.y2);
++
++  /* Preserve the source framebuffer's pixel phase in both the allocation
++   * bounds and the transform used to paint into the offscreen.
++   */
++  target_x1 = (int) floorf (box.x1 + source_phase_x);
++  target_y1 = (int) floorf (box.y1 + source_phase_y);
++  target_x2 = (int) ceilf (box.x2 + source_phase_x);
++  target_y2 = (int) ceilf (box.y2 + source_phase_y);
++  target_width = target_x2 - target_x1;
++  target_height = target_y2 - target_y1;
+ 
+-  target_width = ceilf (target_width);
+-  target_height = ceilf (target_height);
++  priv->fbo_offset_x = target_x1 / resource_scale;
++  priv->fbo_offset_y = target_y1 / resource_scale;
+ 
+   /* First assert that the framebuffer is the right size... */
+-  if (!update_fbo (effect, (int) target_width, (int) target_height, resource_scale))
++  if (!update_fbo (effect, target_width, target_height, resource_scale))
+     goto disable_effect;
+ 
+   offscreen = COGL_FRAMEBUFFER (priv->offscreen);
+@@ -409,6 +587,33 @@
+ 
+   cogl_framebuffer_set_projection_matrix (offscreen, &projection);
+ 
++  if (priv->has_source_phase)
++    {
++      transform_framebuffer_points (offscreen,
++                                    &local_origin,
++                                    &offscreen_origin,
++                                    1);
++      desired_origin_x = source_phase_x - target_x1;
++      desired_origin_y = source_phase_y - target_y1;
++      priv->fbo_offset_x +=
++        (offscreen_origin.x - desired_origin_x) / resource_scale;
++      priv->fbo_offset_y +=
++        (offscreen_origin.y - desired_origin_y) / resource_scale;
++
++      clutter_actor_get_transform (priv->stage, &modelview);
++      graphene_matrix_init_translate (
++        &transform,
++        &GRAPHENE_POINT3D_INIT (-priv->fbo_offset_x,
++                                -priv->fbo_offset_y,
++                                0.0));
++      graphene_matrix_scale (&transform,
++                             stage_width / target_width,
++                             stage_height / target_height,
++                             1.0);
++      graphene_matrix_multiply (&transform, &modelview, &modelview);
++      cogl_framebuffer_set_modelview_matrix (offscreen, &modelview);
++    }
++
+   return TRUE;
+ 
+ disable_effect:
+@@ -464,7 +669,7 @@
+   graphene_matrix_t transform;
+   float unscale;
+ 
+-  unscale = 1.0f / clutter_actor_get_resource_scale (priv->actor);
++  unscale = 1.0f / priv->source_resource_scale;
+   graphene_matrix_init_scale (&transform, unscale, unscale, 1.0f);
+   graphene_matrix_translate (&transform,
+                              &GRAPHENE_POINT3D_INIT (priv->fbo_offset_x,
+@@ -553,6 +758,12 @@
+     clutter_offscreen_effect_get_instance_private (self);
+   ClutterEffectClass *parent_class =
+     CLUTTER_EFFECT_CLASS (clutter_offscreen_effect_parent_class);
++  CoglFramebuffer *framebuffer;
++  float resource_scale;
++  float source_phase_x = 0.0f;
++  float source_phase_y = 0.0f;
++  gboolean has_source_phase;
++  gboolean phase_changed;
+ 
+   if (flags & CLUTTER_EFFECT_PAINT_BYPASS_EFFECT)
+     {
+@@ -561,10 +772,30 @@
+       return;
+     }
+ 
++  framebuffer = clutter_paint_context_get_framebuffer (paint_context);
++  resource_scale = clutter_actor_get_real_resource_scale (priv->actor);
++  if (priv->offscreen)
++    has_source_phase =
++      get_framebuffer_phase (framebuffer,
++                             resource_scale,
++                             &priv->source_box,
++                             &source_phase_x,
++                             &source_phase_y);
++  else
++    has_source_phase = FALSE;
++  phase_changed =
++    has_source_phase != priv->has_source_phase ||
++    resource_scale != priv->source_resource_scale ||
++    (has_source_phase &&
++     (!phases_equal (source_phase_x, priv->source_phase_x) ||
++      !phases_equal (source_phase_y, priv->source_phase_y)));
++
+   /* If we've already got a cached image and the actor hasn't been redrawn
+    * then we can just use the cached image in the FBO.
+    */
+-  if (priv->offscreen == NULL || (flags & CLUTTER_EFFECT_PAINT_ACTOR_DIRTY))
++  if (priv->offscreen == NULL ||
++      (flags & CLUTTER_EFFECT_PAINT_ACTOR_DIRTY) ||
++      phase_changed)
+     parent_class->paint (effect, node, paint_context, flags);
+   else
+     clutter_offscreen_effect_paint_texture (self, node, paint_context);
+--- a/src/compositor/clutter-utils.c
++++ b/src/compositor/clutter-utils.c
+@@ -187,3 +187,34 @@
+                                                 out_transforms);
+ }
+ 
++MtkRegion *
++meta_region_create_inset (const MtkRegion *region)
++{
++  g_autoptr (MtkRegion) horizontal = NULL;
++  g_autoptr (MtkRegion) shifted = NULL;
++  MtkRegion *inset;
++
++  /* Intersect one-unit translations of the complete region so adjacent
++   * rectangles remain a single opaque area rather than growing false seams.
++   */
++  horizontal = mtk_region_copy (region);
++
++  shifted = mtk_region_copy (region);
++  mtk_region_translate (shifted, 1, 0);
++  mtk_region_intersect (horizontal, shifted);
++
++  mtk_region_translate (shifted, -2, 0);
++  mtk_region_intersect (horizontal, shifted);
++
++  inset = mtk_region_copy (horizontal);
++
++  g_clear_pointer (&shifted, mtk_region_unref);
++  shifted = mtk_region_copy (horizontal);
++  mtk_region_translate (shifted, 0, 1);
++  mtk_region_intersect (inset, shifted);
++
++  mtk_region_translate (shifted, 0, -2);
++  mtk_region_intersect (inset, shifted);
++
++  return inset;
++}
+--- a/src/compositor/clutter-utils.h
++++ b/src/compositor/clutter-utils.h
+@@ -21,6 +21,10 @@
+ #pragma once
+ 
+ #include "clutter/clutter.h"
++#include "core/util-private.h"
++
++META_EXPORT_TEST
++MtkRegion * meta_region_create_inset (const MtkRegion *region);
+ 
+ typedef struct {
+   int x_origin, y_origin;
+--- a/src/compositor/meta-shaped-texture-private.h
++++ b/src/compositor/meta-shaped-texture-private.h
+@@ -42,6 +42,23 @@
+ void meta_shaped_texture_set_is_y_inverted (MetaShapedTexture *stex,
+                                             gboolean           is_y_inverted);
+ MtkRegion * meta_shaped_texture_get_opaque_region (MetaShapedTexture *stex);
++MtkRegion *
++meta_shaped_texture_get_sampling_opaque_region (MetaShapedTexture *stex);
++gboolean
++meta_shaped_texture_get_mipmap_scale_units (MetaShapedTexture *stex,
++                                            float             *x_scale_unit,
++                                            float             *y_scale_unit);
++gboolean
++meta_shaped_texture_can_use_mipmaps (MetaShapedTexture *stex);
++gboolean meta_shaped_texture_should_use_mipmaps (MetaShapedTexture *stex,
++                                                 float              x_scale,
++                                                 float              y_scale);
++META_EXPORT_TEST
++gboolean meta_should_use_mipmaps (gboolean create_mipmaps,
++                                  int      texture_width,
++                                  int      texture_height,
++                                  float    x_scale,
++                                  float    y_scale);
+ gboolean meta_shaped_texture_is_opaque (MetaShapedTexture *stex);
+ gboolean meta_shaped_texture_has_alpha (MetaShapedTexture *stex);
+ void meta_shaped_texture_set_transform (MetaShapedTexture    *stex,
+--- a/src/compositor/meta-shaped-texture.c
++++ b/src/compositor/meta-shaped-texture.c
+@@ -101,6 +101,11 @@
+   /* The region containing only fully opaque pixels */
+   MtkRegion *opaque_region;
+ 
++  /* The opaque region excluding pixels whose sampling footprint can extend
++   * beyond the opaque region.
++   */
++  MtkRegion *sampling_opaque_region;
++
+   /* MetaCullable regions, see that documentation for more details */
+   MtkRegion *clip_region;
+ 
+@@ -341,6 +346,7 @@
+   meta_shaped_texture_reset_pipelines (stex);
+ 
+   g_clear_pointer (&stex->opaque_region, mtk_region_unref);
++  g_clear_pointer (&stex->sampling_opaque_region, mtk_region_unref);
+   g_clear_pointer (&stex->clip_region, mtk_region_unref);
+ 
+   G_OBJECT_CLASS (meta_shaped_texture_parent_class)->dispose (object);
+@@ -707,6 +713,28 @@
+ }
+ 
+ static void
++get_sample_size (MetaShapedTexture *stex,
++                 int               *sample_width,
++                 int               *sample_height)
++{
++  if (stex->has_viewport_src_rect)
++    {
++      *sample_width = (int) (stex->viewport_src_rect.size.width *
++                             stex->buffer_scale);
++      *sample_height = (int) (stex->viewport_src_rect.size.height *
++                              stex->buffer_scale);
++    }
++  else
++    {
++      *sample_width = meta_multi_texture_get_width (stex->texture);
++      *sample_height = meta_multi_texture_get_height (stex->texture);
++    }
++
++  if (mtk_monitor_transform_is_rotated (stex->transform))
++    flip_ints (sample_width, sample_height);
++}
++
++static void
+ do_paint_content (MetaShapedTexture   *stex,
+                   ClutterPaintNode    *root_node,
+                   ClutterPaintContext *paint_context,
+@@ -716,13 +744,13 @@
+   int dst_width, dst_height;
+   MtkRectangle content_rect;
+   gboolean use_opaque_region;
++  MtkRegion *paint_opaque_region;
+   MtkRegion *blended_tex_region;
+   CoglPipelineFilter min_filter, mag_filter;
+   MetaTransforms transforms;
+   MetaMultiTexture *paint_tex = stex->texture;
+   CoglFramebuffer *framebuffer;
+   int sample_width, sample_height;
+-  int texture_width, texture_height;
+   gboolean debug_paint_opaque_region;
+   int n_planes;
+ 
+@@ -734,9 +762,6 @@
+   if (dst_width == 0 || dst_height == 0) /* no contents yet */
+     return;
+ 
+-  texture_width = meta_multi_texture_get_width (stex->texture);
+-  texture_height = meta_multi_texture_get_height (stex->texture);
+-
+   content_rect = (MtkRectangle) {
+     .x = 0,
+     .y = 0,
+@@ -755,20 +780,7 @@
+   if (!framebuffer)
+     framebuffer = clutter_paint_context_get_framebuffer (paint_context);
+ 
+-  if (stex->has_viewport_src_rect)
+-    {
+-      sample_width = (int) (stex->viewport_src_rect.size.width *
+-                            stex->buffer_scale);
+-      sample_height = (int) (stex->viewport_src_rect.size.height *
+-                             stex->buffer_scale);
+-    }
+-  else
+-    {
+-      sample_width = texture_width;
+-      sample_height = texture_height;
+-    }
+-  if (mtk_monitor_transform_is_rotated (stex->transform))
+-    flip_ints (&sample_width, &sample_height);
++  get_sample_size (stex, &sample_width, &sample_height);
+ 
+   if (meta_actor_painting_untransformed (framebuffer,
+                                          dst_width, dst_height,
+@@ -788,18 +800,24 @@
+        * half then sticking with COGL_PIPELINE_FILTER_LINEAR will look
+        * and perform better.
+        */
+-      if (stex->create_mipmaps &&
+-          transforms.x_scale < 0.5 &&
+-          transforms.y_scale < 0.5 &&
+-          texture_width >= 8 &&
+-          texture_height >= 8)
++      if (meta_shaped_texture_should_use_mipmaps (stex,
++                                                  transforms.x_scale,
++                                                  transforms.y_scale))
+         {
+           paint_tex = meta_texture_mipmap_get_paint_texture (stex->texture_mipmap);
+           min_filter = COGL_PIPELINE_FILTER_LINEAR_MIPMAP_NEAREST;
+         }
+     }
+ 
+-  use_opaque_region = stex->opaque_region && opacity == 255;
++  if (min_filter == COGL_PIPELINE_FILTER_NEAREST &&
++      mag_filter == COGL_PIPELINE_FILTER_NEAREST)
++    paint_opaque_region = stex->opaque_region;
++  else if (min_filter == COGL_PIPELINE_FILTER_LINEAR_MIPMAP_NEAREST)
++    paint_opaque_region = NULL;
++  else
++    paint_opaque_region = stex->sampling_opaque_region;
++
++  use_opaque_region = paint_opaque_region && opacity == 255;
+ 
+   if (use_opaque_region)
+     {
+@@ -808,7 +826,7 @@
+       else
+         blended_tex_region = mtk_region_create_rectangle (&content_rect);
+ 
+-      mtk_region_subtract (blended_tex_region, stex->opaque_region);
++      mtk_region_subtract (blended_tex_region, paint_opaque_region);
+     }
+   else
+     {
+@@ -846,11 +864,11 @@
+       if (stex->clip_region)
+         {
+           region = mtk_region_copy (stex->clip_region);
+-          mtk_region_intersect (region, stex->opaque_region);
++          mtk_region_intersect (region, paint_opaque_region);
+         }
+       else
+         {
+-          region = mtk_region_ref (stex->opaque_region);
++          region = mtk_region_ref (paint_opaque_region);
+         }
+ 
+       if (!mtk_region_is_empty (region))
+@@ -1291,8 +1309,12 @@
+                                        MtkRegion         *opaque_region)
+ {
+   g_clear_pointer (&stex->opaque_region, mtk_region_unref);
++  g_clear_pointer (&stex->sampling_opaque_region, mtk_region_unref);
+   if (opaque_region)
+-    stex->opaque_region = mtk_region_ref (opaque_region);
++    {
++      stex->opaque_region = mtk_region_ref (opaque_region);
++      stex->sampling_opaque_region = meta_region_create_inset (opaque_region);
++    }
+ }
+ 
+ MtkRegion *
+@@ -1301,6 +1323,69 @@
+   return stex->opaque_region;
+ }
+ 
++MtkRegion *
++meta_shaped_texture_get_sampling_opaque_region (MetaShapedTexture *stex)
++{
++  return stex->sampling_opaque_region;
++}
++
++gboolean
++meta_shaped_texture_get_mipmap_scale_units (MetaShapedTexture *stex,
++                                            float             *x_scale_unit,
++                                            float             *y_scale_unit)
++{
++  int sample_width;
++  int sample_height;
++
++  meta_shaped_texture_ensure_size_valid (stex);
++
++  if (!stex->texture || stex->dst_width == 0 || stex->dst_height == 0)
++    return FALSE;
++
++  get_sample_size (stex, &sample_width, &sample_height);
++  if (sample_width == 0 || sample_height == 0)
++    return FALSE;
++
++  *x_scale_unit = stex->dst_width / (float) sample_width;
++  *y_scale_unit = stex->dst_height / (float) sample_height;
++
++  return TRUE;
++}
++
++gboolean
++meta_shaped_texture_can_use_mipmaps (MetaShapedTexture *stex)
++{
++  return stex->create_mipmaps &&
++         stex->tex_width >= 8 &&
++         stex->tex_height >= 8;
++}
++
++gboolean
++meta_shaped_texture_should_use_mipmaps (MetaShapedTexture *stex,
++                                        float              x_scale,
++                                        float              y_scale)
++{
++  return meta_should_use_mipmaps (meta_shaped_texture_can_use_mipmaps (stex),
++                                  stex->tex_width,
++                                  stex->tex_height,
++                                  x_scale,
++                                  y_scale);
++}
++
++gboolean
++meta_should_use_mipmaps (gboolean create_mipmaps,
++                         int      texture_width,
++                         int      texture_height,
++                         float    x_scale,
++                         float    y_scale)
++{
++  return create_mipmaps &&
++         x_scale < 0.5f &&
++         y_scale < 0.5f &&
++         texture_width >= 8 &&
++         texture_height >= 8;
++}
++
+ gboolean
+ meta_shaped_texture_has_alpha (MetaShapedTexture *stex)
+ {
+--- a/src/compositor/meta-surface-actor.c
++++ b/src/compositor/meta-surface-actor.c
+@@ -17,6 +17,8 @@
+ 
+ #include "config.h"
+ 
++#include <math.h>
++
+ #include "compositor/meta-surface-actor.h"
+ 
+ #include "clutter/clutter.h"
+@@ -421,6 +423,103 @@
+ }
+ 
+ static void
++transform_point (const graphene_matrix_t *matrix,
++                 float                    x,
++                 float                    y,
++                 graphene_point3d_t      *point)
++{
++  graphene_matrix_transform_point3d (
++    matrix,
++    &GRAPHENE_POINT3D_INIT (x, y, 0.0f),
++    point);
++}
++
++static gboolean
++meta_surface_actor_may_use_mipmaps (MetaSurfaceActor  *surface_actor,
++                                    MetaShapedTexture *texture)
++{
++  const float scale_epsilon = 1.0f / 256.0f;
++  ClutterActor *actor = CLUTTER_ACTOR (surface_actor);
++  ClutterActor *stage = clutter_actor_get_stage (actor);
++  graphene_matrix_t actor_to_stage;
++  graphene_point3d_t origin;
++  graphene_point3d_t x_basis;
++  graphene_point3d_t y_basis;
++  float actor_x_scale;
++  float actor_y_scale;
++  float x_scale_unit;
++  float y_scale_unit;
++  GList *l;
++
++  if (!meta_shaped_texture_can_use_mipmaps (texture))
++    return FALSE;
++
++  if (!stage ||
++      clutter_actor_has_mapped_clones (actor) ||
++      clutter_actor_is_in_clone_paint (actor))
++    return TRUE;
++
++  if (!meta_shaped_texture_get_mipmap_scale_units (texture,
++                                                   &x_scale_unit,
++                                                   &y_scale_unit))
++    return TRUE;
++
++  clutter_actor_get_relative_transformation_matrix (actor,
++                                                    stage,
++                                                    &actor_to_stage);
++  if (!graphene_matrix_is_2d (&actor_to_stage))
++    return TRUE;
++
++  transform_point (&actor_to_stage, 0.0f, 0.0f, &origin);
++  transform_point (&actor_to_stage, 1.0f, 0.0f, &x_basis);
++  transform_point (&actor_to_stage, 0.0f, 1.0f, &y_basis);
++
++  /* Painting considers signed scales when choosing mipmaps. Fail closed for
++   * reflections rather than making a different decision based on magnitude.
++   */
++  if (!isfinite (origin.x) ||
++      !isfinite (origin.y) ||
++      !isfinite (x_basis.x) ||
++      !isfinite (x_basis.y) ||
++      !isfinite (y_basis.x) ||
++      !isfinite (y_basis.y) ||
++      fabsf (x_basis.y - origin.y) > scale_epsilon ||
++      fabsf (y_basis.x - origin.x) > scale_epsilon ||
++      x_basis.x < origin.x ||
++      y_basis.y < origin.y)
++    return TRUE;
++
++  actor_x_scale = fabsf (x_basis.x - origin.x);
++  actor_y_scale = fabsf (y_basis.y - origin.y);
++
++  l = clutter_actor_peek_stage_views (actor);
++  if (!l)
++    return TRUE;
++
++  for (; l; l = l->next)
++    {
++      ClutterStageView *view = l->data;
++      float view_scale = clutter_stage_view_get_scale (view);
++      float x_scale;
++      float y_scale;
++
++      x_scale = MAX (0.0f,
++                     actor_x_scale * view_scale * x_scale_unit -
++                     scale_epsilon);
++      y_scale = MAX (0.0f,
++                     actor_y_scale * view_scale * y_scale_unit -
++                     scale_epsilon);
++
++      if (meta_shaped_texture_should_use_mipmaps (texture,
++                                                  x_scale,
++                                                  y_scale))
++        return TRUE;
++    }
++
++  return FALSE;
++}
++
++static void
+ subtract_opaque_region (MetaSurfaceActor *surface_actor,
+                         MtkRegion        *region)
+ {
+@@ -441,13 +540,21 @@
+       if (!opaque_region)
+         return;
+ 
++      if (meta_surface_actor_may_use_mipmaps (surface_actor, texture))
++        return;
++
+       if (priv->background_blur_sample_region)
+         {
+           effective_opaque_region = mtk_region_copy (opaque_region);
+           mtk_region_subtract (effective_opaque_region,
+                                priv->background_blur_sample_region);
+-          opaque_region = effective_opaque_region;
++          opaque_region = meta_region_create_inset (effective_opaque_region);
++          g_clear_pointer (&effective_opaque_region, mtk_region_unref);
++          effective_opaque_region = opaque_region;
+         }
++      else
++        opaque_region =
++          meta_shaped_texture_get_sampling_opaque_region (texture);
+ 
+       mtk_region_subtract (region, opaque_region);
+     }

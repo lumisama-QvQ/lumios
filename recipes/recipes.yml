@@ -14,7 +14,8 @@ modules:
       - ibus-mozc
     auto-remove: false
 - type: script
-  # 重建 mutter 并反向应用 upstream d5e397c2（恢复不透明区域 blending）
+  # 重建 mutter：backport !5179（分数缩放 offscreen effect 像素相位）+ 反向应用 d5e397c2（恢复不透明区域 blending）
+  # 详见 README 的「mutter 补丁」一节
   scripts:
     - override-mutter.sh
 - from-file: custom.yml
