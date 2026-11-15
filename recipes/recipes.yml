@@ -8,6 +8,9 @@ platforms:
   - linux/amd64
 modules:
   # L1 基线：几乎不变
+  - type: kargs
+    kargs:
+      - rootflags=subvol=root,compress=zstd:1
   - type: dnf
     remove:
       packages:

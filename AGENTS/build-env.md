@@ -6,7 +6,7 @@
 2. 构建容器里对 `/etc/group`、`/etc/passwd` 的改动不会进入镜像；运行时需要的组/用户必须写 `sysusers.d` / `tmpfiles.d`。
 3. 运行中的系统 `/usr` 只读，属组/权限修复只能放在构建期。
 4. 系统级 GNOME 扩展装完默认禁用，需要用户手动启用。
-5. btrfs 压缩由开机的 `lumios-fix-btrfs-compression.service` 兜底（rootflags / fstab 根条目 / 重挂载）。
+5. btrfs 压缩：`kargs` 模块写 rootflags，开机 service 注释 fstab 的 `/` 条目。不要在运行时调 `rpm-ostree kargs`，它每次会在 ostree 里新建部署。
 
 ## 本地验证
 

@@ -31,15 +31,14 @@ systemctl reboot
 | `mutter-mr5179.patch`   | 修复特定情况下字体渲染模糊问题         | MR [!5179](https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/5179)                                      | **未合入**，backport |
 | `mutter-d5e397c2.patch` | 修复2k等分辨率下分数缩放黑边的回归问题 | commit [`d5e397c2`](https://gitlab.gnome.org/GNOME/mutter/-/commit/d5e397c2d4f5c35b648fc52edfac2228127e89fd) | 已合入，主动回退     |
 
-### btrfs 透明压缩（`files/system/usr/libexec/lumios-fix-btrfs-compression`）
+### btrfs 透明压缩（`recipes/recipes.yml` + `files/system/usr/libexec/lumios-fix-btrfs-compression`）
 
 silverblue自43起存在透明压缩未预期启用的问题（[ostree#72](https://gitlab.com/fedora/ostree/sig/-/work_items/72)），但如今仍未修复
 
-这里我们通过一个systemd的service服务来修复它
+- 构建期用 `kargs` 模块写入 `rootflags=subvol=root,compress=zstd:1`，bootc 切换镜像时注入引导项
+- 开机用 service 注释掉 `/etc/fstab` 的 `/` btrfs 条目，解决systemd尝试重挂载的报错
 
-- `/proc/cmdline` 里没有 `compress=zstd` 时，用 `rpm-ostree kargs` 补 `rootflags=subvol=root,compress=zstd:1`；
-- 注释掉 `/etc/fstab` 的 `/` btrfs 条目，解决systemd尝试重挂载的报错
-- 首次允许服务时 `mount -o remount,compress=zstd:1 /var`使透明压缩立即生效
+不在运行时调 `rpm-ostree kargs`：它每执行一次就新建一个部署，压缩参数反而要等重启才可能生效
 
 ### 禁用 NetworkManager-wait-online（`recipes/recipes.yml`）
 

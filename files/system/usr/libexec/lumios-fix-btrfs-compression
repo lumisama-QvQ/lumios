@@ -1,27 +1,9 @@
 #!/usr/bin/env bash
-# btrfs 透明压缩修复：rootflags、fstab 根条目、当次重挂载；每次开机幂等执行。
+# 注释 fstab 的 / 条目，避免 systemd 按它重挂载根；rootflags 由镜像的 kargs 注入。
 set -euo pipefail
 
-# bootc switch 会重置 BLS 参数，所以每次开机检查
-if ! grep -q 'rootflags=[^ ]*compress=zstd' /proc/cmdline; then
-  if rpm-ostree kargs \
-      --delete-if-present=rootflags=subvol=root \
-      --append=rootflags=subvol=root,compress=zstd:1; then
-    echo "kernel arguments updated: rootflags += compress=zstd:1"
-  else
-    echo "warning: failed to update kernel arguments" >&2
-  fi
-fi
-
-# systemd 会按 fstab 的 / 条目重新挂载根，与 ostree 的 rootflags 冲突
 if grep -qE '^[^#].*[[:space:]]/[[:space:]]+btrfs[[:space:]]' /etc/fstab; then
   sed -i -E 's|^([^#].*[[:space:]]/[[:space:]]+btrfs[[:space:]].*)$|# \1 # disabled by lumios|' /etc/fstab
   systemctl daemon-reload
   echo "commented out root btrfs entry in /etc/fstab"
 fi
-
-mount -o remount,compress=zstd:1 /sysroot 2>/dev/null \
-  || echo "warning: remount /sysroot failed" >&2
-
-mount -o remount,compress=zstd:1 /var 2>/dev/null \
-  || echo "warning: remount /var failed" >&2
