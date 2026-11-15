@@ -55,6 +55,7 @@ modules:
         - librime-lua
         - firefox-langpacks
         - ibus-rime
+        - lm-sensors
 
   # L4 CLI：低频，体积小
   - type: dnf
@@ -81,6 +82,9 @@ modules:
   - type: script
     scripts:
       - bibata-cursors.sh
+  - type: gschema-overrides
+    include:
+      - zz1-cursor.gschema.override
 
   # L7 低增量
   - type: default-flatpaks
