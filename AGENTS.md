@@ -11,5 +11,6 @@
 - [GNOME 扩展](AGENTS/gnome-extensions.md)
 - [光标 / 图标主题](AGENTS/themes.md)
 - [内核与签名](AGENTS/kernel.md)
+- [文风](AGENTS/style.md)
 
 注释约定：只写从代码读不出来的信息；等同翻译代码的注释不写，可推导的内容只留一句短提示。

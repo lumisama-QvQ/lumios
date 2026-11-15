@@ -33,6 +33,10 @@ modules:
     system:
       enabled:
         - lumios-fix-btrfs-compression.service
+      # 不自动挂载网络磁盘（NFS/SMB）；NFS 本身保留，仍可手动挂载
+      disabled:
+        - remote-fs.target
+        - NetworkManager-wait-online.service
 
   # L2 核心补丁：低频，构建慢
   - type: script

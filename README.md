@@ -41,6 +41,12 @@ silverblue自43起存在透明压缩未预期启用的问题（[ostree#72](https
 - 注释掉 `/etc/fstab` 的 `/` btrfs 条目，解决systemd尝试重挂载的报错
 - 首次允许服务时 `mount -o remount,compress=zstd:1 /var`使透明压缩立即生效
 
+### 禁用 NetworkManager-wait-online（`recipes/recipes.yml`）
+
+这组件为了兼容遗留的服务器挂载逻辑，但桌面端启用会拖慢甚至数秒启动，这反而会导致有些软件工作非预期（比如clash-verge-rev），弊远大于利。
+
+> 如开机刚需挂载网络文件系统，请自行启动
+
 ## 验证签名
 
 ```bash

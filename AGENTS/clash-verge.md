@@ -26,17 +26,26 @@
 
 链路上线只用了 3 秒，`startup complete` 被 DHCP 拖后 9.3 秒；`nm-online -s` 等的就是这一行。服务自身的启动耗时 20 余毫秒（`Started` → 首行日志 23ms），完全不慢。
 
-## 为什么从 clash 这边不好改
+## 试过并已移除的做法
 
-单元由 `/usr/bin/clash-verge-service-install` 生成，模板写死 `After=network-online.target nftables.service iptables.service`，写进 `/etc/systemd/system/` 后 `daemon-reload` + `enable` + `start`。能改排序的只有两处，都不干净：
+仓库里现在没有任何补丁文件，下面三条都验证过不通：
 
-- **drop-in 改不掉**：空赋值只重置普通列表，依赖项只能加不能删（[systemd#18154](https://github.com/systemd/systemd/issues/18154)）。systemd 262 下实测：drop-in 里写 `After=` + `After=nftables.service iptables.service`，`systemctl show -p After` 里 `network-online.target` 仍在。
-- **整份覆盖单元有代价**：`ExecStart` 必须指 `/var/lib/clash-verge-service/bin/clash-verge-service`——服务目录硬编码在 `/var/lib/clash-verge-service`，换路径不换目录，指 `/usr/bin` 那份会 `failed to open service directory`。而 `/var/lib` 布局由 app 首次安装建立：全新机器首启这个单元必失败（`Restart=always` 每 5s 重试），app 判定服务不可用后重装并覆盖 `/etc` 单元，之后 `/etc` 三方合并会让被覆盖的版本长期赖着。
+| 做法 | 结果 |
+| --- | --- |
+| `/etc/…/clash-verge-service.service.d/10-start-early.conf` 里 `After=` 空值重置 | 无效。空赋值只重置普通列表，依赖项只能加不能删（[systemd#18154](https://github.com/systemd/systemd/issues/18154)）；systemd 262 实测 `After` 里 `network-online.target` 仍在 |
+| 镜像里预制整份 `/etc/systemd/system/clash-verge-service.service` | 首启必失败（`/var/lib` 布局要等 app 安装才建立），app 随后安装并覆盖；`/etc` 三方合并还会让被覆盖的版本长期赖着 |
+| 镜像里预制整份 `/usr/lib/systemd/system/clash-verge-service.service` | app 装过之后 `/etc` 那份优先（`/etc` > `/run` > `/usr/lib`），这份被遮蔽；不 enable 则没有东西拉它，等于死文件 |
 
-## 不要重试
+判据始终是 `systemctl show -p FragmentPath clash-verge-service`：不是 `/usr/lib/...` 就说明看到的是 app 那份。
 
-- `/etc` 里放 `After=` 空值的 drop-in：无效，原因见上。
-- 镜像里放整份 `/etc` 单元：首启失败 + 被 app 覆盖 + `/etc` 合并不回来。
+## 改排序为什么这么难
+
+- 单元由 `/usr/bin/clash-verge-service-install` 生成，模板写死 `After=network-online.target nftables.service iptables.service`，写进 `/etc/systemd/system/` 后 `daemon-reload` + `enable` + `start`。
+- `After=nftables.service iptables.service` 不能整条删掉，TUN 规则要这个顺序。
+- `ExecStart` 必须是 `/var/lib/clash-verge-service/bin/clash-verge-service`：服务目录硬编码在 `/var/lib/clash-verge-service`，指 `/usr/bin` 那份会 `failed to open service directory`。
+
+## 不要做
+
 - mask `NetworkManager-wait-online.service`：会连带 `brew-*`、`flatpak-system-updates`、`dnf-makecache` 这些 `Wants=network-online.target` 的单元失去网络就绪门控。
 
 ## 待试
@@ -48,6 +57,7 @@
 ## 排查命令
 
 ```bash
+systemctl show -p FragmentPath -p DropInPaths clash-verge-service
 systemctl show -p After clash-verge-service | tr ' ' '\n' | grep -c network-online
 systemctl show -p ActiveEnterTimestamp --value clash-verge-service
 journalctl -b -u NetworkManager | grep -E 'dhcp4|startup complete'
