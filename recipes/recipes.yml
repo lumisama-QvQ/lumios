@@ -55,7 +55,6 @@ modules:
         - librime-lua
         - firefox-langpacks
         - ibus-rime
-        - lm-sensors
 
   # L4 CLI：低频，体积小
   - type: dnf
