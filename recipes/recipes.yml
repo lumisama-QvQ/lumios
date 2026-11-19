@@ -51,6 +51,7 @@ modules:
     install:
       packages:
         - libgda
+        - fuse-libs
         - libgda-sqlite
         - librime-lua
         - firefox-langpacks
